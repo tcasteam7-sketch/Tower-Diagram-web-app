@@ -55,11 +55,7 @@
   #diagramHost svg{width:100%;height:auto;display:block;}
   #diagramHost .placeholder{padding:70px 20px;text-align:center;color:#9aa5ba;font-size:14px;line-height:0;}
   #diagramHost .placeholder p{line-height:1.5;}
-  #geoStage{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
-  #geoHost{width:100%;line-height:0;}
-  #geoHost svg{width:100%;height:auto;display:block;}
-  #geoHost .placeholder{padding:70px 20px;text-align:center;color:#9aa5ba;font-size:14px;line-height:0;}
-  #geoHost .placeholder p{line-height:1.5;}
+
 
   #map{height:560px;border-radius:10px;border:1px solid var(--line);}
   .toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
@@ -67,13 +63,36 @@
   .canva-box{margin-top:14px;padding:14px 16px;background:#f5f8ff;border:1px solid #d7e3ff;border-radius:8px;font-size:12.5px;color:#33436b;line-height:1.6;}
   .canva-box b{color:#1d4ed8;}
 
-  @media print{
-    header,.panel.controls,.toolbar,.canva-box{display:none !important;}
-    body{background:white;}
-    #diagramStage,#map{border:none;border-radius:0;}
-    .panel{box-shadow:none;border:none;padding:0;margin:0;}
-    @page{size:A3 landscape;margin:0;}
+
+
+  @media print {
+    /* Hide the branding header and the "Input files & options" panel —
+       the PDF should only contain the diagram and the map. */
+    header, .panel.controls {
+      display: none !important;
+    }
+    /* Buttons don't do anything on paper, so drop them from the printout too. */
+    .toolbar {
+      display: none !important;
+    }
+    /* Drop panel section headings and helper text — just the diagram and map. */
+    .panel-head, .note, .canva-box {
+      display: none !important;
+    }
+
+    /* Target the map container */
+    #map-panel {
+      /* Forces the element to start on a brand new page */
+      page-break-before: always !important; 
+      break-before: page !important;        
+    
+      /* Prevents the element from being split across pages if it fits on one */
+      page-break-inside: avoid !important;  
+      break-inside: avoid !important;       
+    }
   }
+
+
 </style>
 </head>
 <body>
@@ -98,7 +117,7 @@
         <input type="file" id="latlonFile" accept=".csv">
       </div>
       <div class="field">
-        <label>Performance CSV</label>
+        <label>Performance CSV (optional)</label>
         <input type="file" id="perfFile" accept=".csv">
       </div>
       <div class="field">
@@ -107,7 +126,7 @@
       </div>
       <button id="genBtn">Generate diagram</button>
     </div>
-    <div id="status">Select both CSV files, then click Generate.</div>
+    <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. Then click Generate.</div>
     <div class="legend">
       <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>Main Station</span>
       <span><span class="swatch" style="background:#f5a623;border:2px solid #8a5200"></span>IBH (Block Hut)</span>
@@ -132,22 +151,12 @@
     <div class="canva-box">
       <b>Using Canva?</b> Click <b>Download PNG</b> above, then in Canva choose <b>Create a design → Upload → your PNG</b> — it drops in at full resolution as a background you can layer text/branding over. The generated <b>.pptx</b> file can also be imported directly via Canva's <b>File → Import file</b> option if you're editing the deck itself.
     </div>
+    
   </div>
-
-  <div class="panel">
-    <div class="panel-head">
-      <h2><span class="step">3</span>Geographic route map (SVG, landscape) — plotted on real coordinates</h2>
+  <div class="panel" id="map-panel">
+    <div class="panel-head"><h2><span class="step">2</span>Interactive map </h2></div>
+    <div id="map">
     </div>
-    <div class="toolbar">
-      <button class="secondary" id="downloadGeoSvgBtn" disabled>Download Geo Map SVG</button>
-      <button class="secondary" id="downloadGeoPngBtn" disabled>Download Geo Map PNG</button>
-    </div>
-    <div id="geoStage"><div id="geoHost"><div class="placeholder"><p>The geographic map (true lat/lon positions, same icons/colours, FWD/REV + distance on every link) renders here after Generate.</p></div></div></div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head"><h2><span class="step">4</span>Interactive map (optional)</h2></div>
-    <div id="map"></div>
     <p class="note">Live OpenStreetMap tiles (needs internet). Markers and link colours reuse the same station classification and RSSI thresholds as the diagrams above.</p>
   </div>
 
@@ -176,7 +185,9 @@ const COLORS = {
   lc:     ['#3b82f6','#173f9e','#ffffff'],
 };
 // Good: |RSSI| < 70 dBm. Fair: 70-75 dBm. Poor: > 75 dBm.
+const NO_DATA_LINK_COLOR = '#8a93a3';
 function rslColor(rsl){
+  if (rsl===null || rsl===undefined || isNaN(rsl)) return NO_DATA_LINK_COLOR;
   const mag = Math.abs(rsl);
   if (mag < 70) return '#1e8e3e';
   if (mag <= 75) return '#e8850c';
@@ -206,6 +217,7 @@ function parseLatLon(rows){
   const lonIdx  = header.findIndex(v=>v.includes('lon'));
   if (nameIdx<0||latIdx<0||lonIdx<0) throw new Error('Could not detect Station/Lat/Lon columns.');
   const out = {};
+  const order = [];
   for (let r=headerIdx+1;r<rows.length;r++){
     const row = rows[r];
     if (!row || row.length<=Math.max(nameIdx,latIdx,lonIdx)) continue;
@@ -214,9 +226,30 @@ function parseLatLon(rows){
     const latF=parseFloat(lat), lonF=parseFloat(lon);
     if (isNaN(latF)||isNaN(lonF)) continue;
     const clean = cleanName(name);
-    out[normKey(clean)] = {name:clean, lat:latF, lon:lonF};
+    const key = normKey(clean);
+    if (!(key in out)) order.push(key);
+    out[key] = {name:clean, lat:latF, lon:lonF};
   }
-  return out;
+  return {stations: out, order};
+}
+
+// Used when no Performance CSV is supplied: builds a straight chain of
+// stations in the same order they appear in the Lat/Long CSV, with no
+// RSSI/distance readings attached to the links between them.
+function buildTopologyNoPerf(latlonParsed){
+  const {stations, order: rowOrder} = latlonParsed;
+  const nodes = {}; const order = []; const warnings = [];
+  for (const key of rowOrder){
+    const info = stations[key];
+    if (!info) continue;
+    nodes[key] = {name:info.name, lat:info.lat, lon:info.lon, kind:classifyKind(info.name)};
+    order.push(key);
+  }
+  const edges = [];
+  for (let i=0;i<order.length-1;i++){
+    edges.push([order[i], order[i+1], null, null, null, null]);
+  }
+  return {nodes, edges, order, warnings};
 }
 
 function parsePerformance(rows){
@@ -467,7 +500,7 @@ function nodeCircleSvg(cx, cy, R, key, nodes){
   return out;
 }
 
-function buildSnakeSvg(nodes, edges, topo, title){
+function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
   const {backbone, spurs, extraEdges} = topo;
   const edgeLookup = {};
   for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
@@ -510,7 +543,7 @@ function buildSnakeSvg(nodes, edges, topo, title){
   let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
   elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
   elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
-  elems.push(`<text x="${PAD_X+10}" y="66" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates</text>`);
+  elems.push(`<text x="${PAD_X+10}" y="66" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">${hasPerf ? 'FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates' : 'Tower placement only \u2014 no Performance CSV supplied, so no RSSI or link-distance readings are shown'}</text>`);
 
   let gpsTotal = 0;
   for (let i=0;i<N-1;i++){
@@ -529,10 +562,14 @@ function buildSnakeSvg(nodes, edges, topo, title){
     const key=a+'|'+b;
     if (!(key in edgeLookup)) continue;
     const [df,rf,dr,rr] = edgeLookup[key];
-    const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
-    const fcolor = rslColor(rf), rcolor = rslColor(rr);
     const x1 = Math.min(pa.cx,pb.cx), x2 = Math.max(pa.cx,pb.cx);
     const y = pa.cy;
+    if (!hasPerf || df===null){
+      elems.push(`<line x1="${x1+R}" y1="${y}" x2="${x2-R}" y2="${y}" stroke="${NO_DATA_LINK_COLOR}" stroke-width="4.5" stroke-linecap="round"/>`);
+      continue;
+    }
+    const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    const fcolor = rslColor(rf), rcolor = rslColor(rr);
     elems.push(`<line x1="${x1+R}" y1="${y-6}" x2="${x2-R}" y2="${y-6}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
     elems.push(`<line x1="${x1+R}" y1="${y+6}" x2="${x2-R}" y2="${y+6}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
     const mx=(x1+x2)/2;
@@ -541,30 +578,44 @@ function buildSnakeSvg(nodes, edges, topo, title){
       [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
       [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
     ];
-    elems.push(placeReading(mx, y-44, lines, 12.5, readingBoxes));
+    elems.push(placeReading(mx, y-28, lines, 12.5, readingBoxes));
   }
 
-  // vertical connectors (backbone row-wrap)
-  for (let i=0;i<N-1;i++){
-    const a=backbone[i], b=backbone[i+1];
-    const pa=nodePos(i), pb=nodePos(i+1);
-    if (pa.r===pb.r) continue;
-    const key=a+'|'+b;
+// vertical connectors (backbone row-wrap)
+  for (let i = 0; i < N - 1; i++) {
+    const a = backbone[i], b = backbone[i + 1];
+    const pa = nodePos(i), pb = nodePos(i + 1);
+    if (pa.r === pb.r) continue;
+    const key = a + '|' + b;
     if (!(key in edgeLookup)) continue;
-    const [df,rf,dr,rr] = edgeLookup[key];
-    const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    const [df, rf, dr, rr] = edgeLookup[key];
+
+    // 1. Center connector line(s) on station center
+    const cx = pa.cx;
+    const y1 = pa.cy, y2 = pb.cy;
+
+    if (!hasPerf || df===null){
+      elems.push(`<line x1="${cx}" y1="${y1}" x2="${cx}" y2="${y2}" stroke="${NO_DATA_LINK_COLOR}" stroke-width="4.5" stroke-linecap="round"/>`);
+      continue;
+    }
+
+    const gps = haversineKm(nodes[a].lat, nodes[a].lon, nodes[b].lat, nodes[b].lon);
     const fcolor = rslColor(rf), rcolor = rslColor(rr);
-    const xEdgeF = pa.cx - R - 16;
-    const xEdgeR = pa.cx - R - 30;
-    const y1=pa.cy, y2=pb.cy;
+    const xEdgeF = cx - 7; // Left line
+    const xEdgeR = cx + 7; // Right line
+
     elems.push(`<line x1="${xEdgeF}" y1="${y1}" x2="${xEdgeF}" y2="${y2}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
     elems.push(`<line x1="${xEdgeR}" y1="${y1}" x2="${xEdgeR}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
-    const xEdge = (xEdgeF+xEdgeR)/2;
-    const my=(y1+y2)/2;
-    elems.push(`<g transform="rotate(-90,${xEdge-46},${my})">` + readingSvg(xEdge-46, my, [
-      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
-      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
-      [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+
+    // 2. Position text on the LEFT side of the vertical lines
+    const isLeftWrap = (pa.r % 2 === 1);
+    const textX = cx + (isLeftWrap ? -40 : 40); // -40 puts text on the LEFT side of left turns
+    const my = (y1 + y2) / 2 + 15; // Vertical midpoint
+
+    elems.push(`<g transform="rotate(-90,${textX},${my})">` + readingSvg(textX, my, [
+      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, fcolor],
+      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rcolor],
+      [`GPS ${gps.toFixed(2)} KM`, '#0066cc'],
     ], 12.5) + '</g>');
   }
 
@@ -601,7 +652,7 @@ function buildSnakeSvg(nodes, edges, topo, title){
       elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       const mx=(x1+x2)/2;
-      elems.push(placeReading(mx, y-34, [
+      elems.push(placeReading(mx, y-24, [
         [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
         [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
         [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
@@ -685,11 +736,15 @@ function buildSnakeSvg(nodes, edges, topo, title){
   elems.push(`<line x1="${dividerX}" y1="${ly+10}" x2="${dividerX}" y2="${ly+LEGEND_BAR_H-10}" stroke="#c7ccd6" stroke-width="1.5"/>`);
 
   let rx = dividerX + 30;
-  elems.push(`<text x="${rx}" y="${ly+18}" font-family="Arial" font-size="10.5" font-weight="800" fill="#6b7280" letter-spacing="0.5">LINK QUALITY (RSSI)</text>`);
-  for (const [label,color] of [['Good \u2014 magnitude < 70 dBm','#1e8e3e'],['Fair \u2014 70\u201375 dBm','#e8850c'],['Poor \u2014 > 75 dBm','#c62828']]){
-    elems.push(`<line x1="${rx}" y1="${swY}" x2="${rx+36}" y2="${swY}" stroke="${color}" stroke-width="6" stroke-linecap="round"/>`);
-    elems.push(`<text x="${rx+46}" y="${swY+5}" font-family="Arial" font-size="15" font-weight="700" fill="#151c2c">${xmlEsc(label)}</text>`);
-    rx += 46 + label.length*8.4 + 30;
+  if (hasPerf){
+    elems.push(`<text x="${rx}" y="${ly+18}" font-family="Arial" font-size="10.5" font-weight="800" fill="#6b7280" letter-spacing="0.5">LINK QUALITY (RSSI)</text>`);
+    for (const [label,color] of [['Good \u2014 RSSI < 70 dBm','#1e8e3e'],['Fair \u2014 70\u201375 dBm','#e8850c'],['Poor \u2014 > 75 dBm','#c62828']]){
+      elems.push(`<line x1="${rx}" y1="${swY}" x2="${rx+36}" y2="${swY}" stroke="${color}" stroke-width="6" stroke-linecap="round"/>`);
+      elems.push(`<text x="${rx+46}" y="${swY+5}" font-family="Arial" font-size="15" font-weight="700" fill="#151c2c">${xmlEsc(label)}</text>`);
+      rx += 46 + label.length*8.4 + 30;
+    }
+  } else {
+    elems.push(`<text x="${rx}" y="${swY+5}" font-family="Arial" font-size="14" font-weight="700" fill="#6b7280" font-style="italic">No Performance CSV supplied \u2014 link lines shown in neutral grey, no RSSI/distance readings</text>`);
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_W}" height="${CANVAS_H}" viewBox="0 0 ${CANVAS_W} ${CANVAS_H}">\n${elems.join('\n')}\n</svg>`;
@@ -936,36 +991,39 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
   status.classList.remove('err','ok');
   const latlonFile = $('latlonFile').files[0];
   const perfFile = $('perfFile').files[0];
-  if (!latlonFile || !perfFile){ status.textContent='Please choose both CSV files.'; status.classList.add('err'); return; }
+  if (!latlonFile){ status.textContent='Please choose the Lat/Long CSV file.'; status.classList.add('err'); return; }
+  const hasPerf = !!perfFile;
   try{
     status.textContent = 'Parsing files...';
     const latlonRows = await readCsvFile(latlonFile);
-    const perfRows = await readCsvFile(perfFile);
-    const latlon = parseLatLon(latlonRows);
-    const hops = parsePerformance(perfRows);
-    const {nodes, edges, order, warnings} = buildTopology(latlon, hops);
-    if (Object.keys(nodes).length===0) throw new Error('No matching stations found between the two files — check spelling.');
+    const latlonParsed = parseLatLon(latlonRows);
+    const latlon = latlonParsed.stations;
+
+    let nodes, edges, order, warnings;
+    if (hasPerf){
+      const perfRows = await readCsvFile(perfFile);
+      const hops = parsePerformance(perfRows);
+      ({nodes, edges, order, warnings} = buildTopology(latlon, hops));
+      if (Object.keys(nodes).length===0) throw new Error('No matching stations found between the two files — check spelling.');
+    } else {
+      ({nodes, edges, order, warnings} = buildTopologyNoPerf(latlonParsed));
+      if (Object.keys(nodes).length===0) throw new Error('No valid stations found in the Lat/Long CSV.');
+    }
     const topo = resolveTopology(nodes, edges, order);
     const title = $('titleInput').value.trim() || 'TOWER PLACEMENT LOCATION DIAGRAM';
 
-    const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, topo, title);
+    const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, topo, title, hasPerf);
     $('diagramHost').innerHTML = svg;
     $('downloadSvgBtn').disabled = false;
     $('downloadPngBtn').disabled = false;
     $('printBtn').disabled = false;
 
-    const geoTitle = 'GEOGRAPHIC ROUTE MAP \u2014 ' + title.replace(/^TOWER PLACEMENT LOCATION DIAGRAM\s*/i,'').trim();
-    const {svg: geoSvg} = buildGeoSvg(nodes, edges, geoTitle || 'GEOGRAPHIC ROUTE MAP');
-    $('geoHost').innerHTML = geoSvg;
-    $('downloadGeoSvgBtn').disabled = false;
-    $('downloadGeoPngBtn').disabled = false;
-
     renderMap(nodes, edges, [...topo.backbone, ...topo.spurs.flatMap(s=>s.chain)]);
 
     const nSpurs = topo.spurs.length;
-    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsTotal.toFixed(2)} KM.` + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
+    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsTotal.toFixed(2)} KM.` + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
     status.classList.add('ok');
-    lastState = {svg, geoSvg};
+    lastState = {svg};
   } catch(e){
     status.textContent = 'Error: ' + e.message;
     status.classList.add('err');
@@ -983,15 +1041,6 @@ $('downloadPngBtn').addEventListener('click', ()=>{
   downloadSvgAsPng(lastState.svg, 'tower_placement_diagram.png');
 });
 
-$('downloadGeoSvgBtn').addEventListener('click', ()=>{
-  if (!lastState) return;
-  downloadSvgBlob(lastState.geoSvg, 'geographic_route_map.svg');
-});
-
-$('downloadGeoPngBtn').addEventListener('click', ()=>{
-  if (!lastState) return;
-  downloadSvgAsPng(lastState.geoSvg, 'geographic_route_map.png');
-});
 
 $('printBtn').addEventListener('click', ()=> window.print());
 </script>
