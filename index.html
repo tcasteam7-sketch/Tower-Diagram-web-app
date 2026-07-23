@@ -405,14 +405,47 @@ function towerIconSvg(cx,cy,size,kind){
   return `<image x="${x}" y="${y}" width="${size}" height="${size}" href="data:image/png;base64,${b64}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
-function chipSvg(cx,cy,lines,w,h){
-  let out = `<rect x="${cx-w/2}" y="${cy-h/2}" width="${w}" height="${h}" rx="8" fill="white" fill-opacity="0.95" stroke="#c7ccd6" stroke-width="1.2"/>`;
-  const n = lines.length, lineH = h/n;
+function haloText(cx,cy,text,fontSize,color,anchor){
+  return `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-family="Arial,Helvetica,sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="${anchor||'middle'}" fill="${color}" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" paint-order="stroke fill">${xmlEsc(text)}</text>`;
+}
+
+// Backgroundless reading label: no rectangle chip, just text with a white
+// halo stroke so it stays legible over lines/markers. Width/height are
+// measured from the actual text so long readings never get clipped.
+function readingBox(cx,cy,lines,fontSize){
+  const lineH = fontSize + 5.5;
+  const maxLen = Math.max(...lines.map(([t])=>t.length));
+  const w = maxLen*fontSize*0.58 + 10;
+  const h = lineH*lines.length + 4;
+  return [cx-w/2, cy-h/2, w, h];
+}
+
+function readingSvg(cx,cy,lines,fontSize){
+  const lineH = fontSize + 5.5;
+  const h = lineH*lines.length;
+  let out = '';
   lines.forEach(([text,color],i)=>{
-    const ty = cy - h/2 + lineH*(i+0.72);
-    out += `<text x="${cx}" y="${ty}" font-family="Arial,Helvetica,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="${color}">${xmlEsc(text)}</text>`;
+    const ty = cy - h/2 + lineH*(i+0.78);
+    out += haloText(cx, ty, text, fontSize, color, 'middle');
   });
   return out;
+}
+
+// Places a reading label, nudging it to a nearby free spot if the default
+// position collides with an already-placed label/marker box.
+function placeReading(cx,cy,lines,fontSize,placedBoxes){
+  const candidates = [[0,0],[0,-24],[0,24],[0,-48],[0,48],[44,0],[-44,0],[44,-24],[-44,-24],[44,24],[-44,24]];
+  for (const [dx,dy] of candidates){
+    const bx=cx+dx, by=cy+dy;
+    const bbox = readingBox(bx,by,lines,fontSize);
+    if (!placedBoxes.some(pb=>boxesOverlap(bbox,pb,3))){
+      placedBoxes.push(bbox);
+      return readingSvg(bx,by,lines,fontSize);
+    }
+  }
+  const bbox = readingBox(cx,cy,lines,fontSize);
+  placedBoxes.push(bbox);
+  return readingSvg(cx,cy,lines,fontSize);
 }
 
 function nodeCircleSvg(cx, cy, R, key, nodes){
@@ -469,6 +502,11 @@ function buildSnakeSvg(nodes, edges, topo, title){
   }
   for (let i=0;i<N;i++){ const p=nodePos(i); positions[backbone[i]] = [p.cx, p.cy]; }
 
+  // Shared collision box list so reading labels dodge node markers and
+  // each other instead of stacking on top of them.
+  const readingBoxes = [];
+  for (let i=0;i<N;i++){ const [cx,cy]=positions[backbone[i]]; readingBoxes.push([cx-R,cy-R,R*2,R*2]); }
+
   let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
   elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
   elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
@@ -503,7 +541,7 @@ function buildSnakeSvg(nodes, edges, topo, title){
       [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
       [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
     ];
-    elems.push(chipSvg(mx, y-44, lines, 138, 66));
+    elems.push(placeReading(mx, y-44, lines, 12.5, readingBoxes));
   }
 
   // vertical connectors (backbone row-wrap)
@@ -523,11 +561,11 @@ function buildSnakeSvg(nodes, edges, topo, title){
     elems.push(`<line x1="${xEdgeR}" y1="${y1}" x2="${xEdgeR}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
     const xEdge = (xEdgeF+xEdgeR)/2;
     const my=(y1+y2)/2;
-    elems.push(`<g transform="rotate(-90,${xEdge-46},${my})">` + chipSvg(xEdge-46, my, [
+    elems.push(`<g transform="rotate(-90,${xEdge-46},${my})">` + readingSvg(xEdge-46, my, [
       [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
       [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
       [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-    ], 190, 60) + '</g>');
+    ], 12.5) + '</g>');
   }
 
   // branch lanes
@@ -549,6 +587,7 @@ function buildSnakeSvg(nodes, edges, topo, title){
       const cx = PAD_X + laneColW*(j+0.5);
       positions[key] = [cx, laneCy];
       lanePositions.push([cx, laneCy]);
+      readingBoxes.push([cx-laneR, laneCy-laneR, laneR*2, laneR*2]);
     });
 
     for (let j=0;j<m-1;j++){
@@ -562,11 +601,11 @@ function buildSnakeSvg(nodes, edges, topo, title){
       elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       const mx=(x1+x2)/2;
-      elems.push(chipSvg(mx, y-34, [
+      elems.push(placeReading(mx, y-34, [
         [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
         [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
         [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-      ], 122, 58));
+      ], 12.5, readingBoxes));
     }
 
     if (fork!==null && fork in positions){
@@ -578,11 +617,11 @@ function buildSnakeSvg(nodes, edges, topo, title){
       if (fkey in edgeLookup){
         const [df,rf,dr,rr] = edgeLookup[fkey];
         const gps = haversineKm(nodes[fork].lat,nodes[fork].lon,nodes[chain[0]].lat,nodes[chain[0]].lon);
-        elems.push(chipSvg(mx_, my_, [
+        elems.push(placeReading(mx_, my_, [
           [`SPLIT FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
           [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
           [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-        ], 170, 56));
+        ], 12.5, readingBoxes));
       }
     }
     if (rejoin!==null && rejoin in positions){
@@ -594,11 +633,11 @@ function buildSnakeSvg(nodes, edges, topo, title){
       if (rkey in edgeLookup){
         const [df,rf,dr,rr] = edgeLookup[rkey];
         const gps = haversineKm(nodes[chain[chain.length-1]].lat,nodes[chain[chain.length-1]].lon,nodes[rejoin].lat,nodes[rejoin].lon);
-        elems.push(chipSvg(mx_, my_, [
+        elems.push(placeReading(mx_, my_, [
           [`REJOIN FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
           [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
           [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-        ], 180, 56));
+        ], 12.5, readingBoxes));
       }
     }
 
@@ -753,6 +792,20 @@ function buildGeoSvg(nodes, edges, title){
   elems.push(`<text x="${PAD-44}" y="40" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
   elems.push(`<text x="${PAD-44}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">Plotted from actual station coordinates \u2014 link labels show FWD / REV received signal (dBm) and GPS distance (KM)</text>`);
 
+  // Shared collision box list: pre-seed with node marker footprints so
+  // link-reading labels placed below never land on top of a station icon,
+  // then station name labels (placed further down) dodge both markers and
+  // link readings too.
+  const placedLabelBoxes = [];
+  const nodeR = {};
+  for (const key of keys){
+    const n = nodes[key];
+    const crowded = nearest[key] < 75;
+    const R = crowded ? 19 : 26;
+    nodeR[key] = R;
+    placedLabelBoxes.push([n._x-R, n._y-R, R*2, R*2]);
+  }
+
   let totalGps = 0;
   const seenPairs = new Set();
   for (const [a,b,df,rf,dr,rr] of edges){
@@ -770,22 +823,20 @@ function buildGeoSvg(nodes, edges, title){
     elems.push(`<line x1="${x1-nx}" y1="${y1-ny}" x2="${x2-nx}" y2="${y2-ny}" stroke="${rcolor}" stroke-width="4" stroke-linecap="round"/>`);
     const mx=(x1+x2)/2, my=(y1+y2)/2;
     if (length < 130){
-      elems.push(chipSvg(mx, my, [[`F${rf.toFixed(0)}/${df.toFixed(1)}km \u00b7 R${rr.toFixed(0)}/${dr.toFixed(1)}km`, fcolor]], 148, 24));
+      elems.push(placeReading(mx, my, [[`F${rf.toFixed(0)}/${df.toFixed(1)}km \u00b7 R${rr.toFixed(0)}/${dr.toFixed(1)}km`, fcolor]], 11.5, placedLabelBoxes));
     } else {
-      elems.push(chipSvg(mx, my, [[`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],[`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],[`GPS ${gps.toFixed(2)} KM`,'#0066cc']], 148, 62));
+      elems.push(placeReading(mx, my, [[`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],[`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],[`GPS ${gps.toFixed(2)} KM`,'#0066cc']], 12.5, placedLabelBoxes));
     }
   }
 
-  const placedLabelBoxes = [];
   const sortedKeys = keys.slice().sort((a,b)=>nodes[a]._x-nodes[b]._x);
   for (const key of sortedKeys){
     const n = nodes[key];
     const x=n._x, y=n._y;
-    const crowded = nearest[key] < 75;
-    const R = crowded ? 19 : 26;
+    const R = nodeR[key];
     elems.push(nodeMarkerSvg(x, y, R, key, nodes));
     elems.push(towerIconSvg(x, y-R*0.32, R*0.85, n.kind));
-    const fontSz = crowded ? 12.5 : 14;
+    const fontSz = R===19 ? 12.5 : 14;
     elems.push(placeLabel(x, y, R, n.name, fontSz, placedLabelBoxes));
   }
 
