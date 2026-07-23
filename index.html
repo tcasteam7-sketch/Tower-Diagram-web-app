@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower Placement Diagram Studio</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1522; --panel:#ffffff; --paper:#eef1f6; --line:#dfe3ea;
+    --ink:#151c2c; --sub:#5b6478; --accent:#3b82f6; --accent-dark:#1d4ed8;
+    --good:#1e8e3e; --fair:#e8850c; --poor:#c62828;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Segoe UI",Arial,Helvetica,sans-serif;}
+  header{background:var(--bg);color:white;padding:22px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+  header .brand{display:flex;align-items:center;gap:14px;}
+  header .brand .dot{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#1e8e3e);display:flex;align-items:center;justify-content:center;font-size:19px;}
+  header h1{font-size:19px;margin:0;font-weight:800;letter-spacing:.2px;}
+  header p{margin:2px 0 0;font-size:12.5px;color:#9aa5ba;}
+  header .badge{font-size:11.5px;color:#9aa5ba;background:#1c2438;border:1px solid #2a3352;padding:6px 12px;border-radius:20px;}
+
+  .wrap{max-width:1500px;margin:0 auto;padding:22px 28px 70px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:22px;box-shadow:0 1px 2px rgba(20,25,40,.03);}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .panel-head h2{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);font-weight:800;}
+  .panel-head .step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:white;font-size:12px;font-weight:800;margin-right:8px;}
+
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--sub);font-weight:600;}
+  .field input[type=file]{font-size:12.5px;color:var(--ink);}
+  .field input[type=number], .field input[type=text]{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;color:var(--ink);}
+  .field input[type=number]{width:78px;}
+  .field input[type=text]{min-width:300px;}
+
+  button{background:var(--accent);color:white;border:none;border-radius:7px;padding:11px 20px;font-size:13.5px;font-weight:700;cursor:pointer;transition:background .15s;}
+  button:hover{background:var(--accent-dark);}
+  button.secondary{background:white;color:var(--accent);border:1.5px solid var(--accent);}
+  button.secondary:hover{background:#eef4ff;}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+
+  #status{font-size:12.5px;color:var(--sub);margin-top:12px;padding:10px 12px;background:var(--paper);border-radius:6px;}
+  #status.err{color:var(--poor);font-weight:700;background:#fdeceb;}
+  #status.ok{color:var(--good);font-weight:700;background:#eaf6ec;}
+
+  .legend{display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;margin-top:14px;color:var(--sub);}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-weight:600;}
+  .swatch{width:14px;height:14px;border-radius:50%;display:inline-block;}
+  .lineswatch{width:24px;height:4px;display:inline-block;border-radius:3px;}
+
+  #diagramStage{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  #diagramHost{width:100%;line-height:0;}
+  #diagramHost svg{width:100%;height:auto;display:block;}
+  #diagramHost .placeholder{padding:70px 20px;text-align:center;color:#9aa5ba;font-size:14px;line-height:0;}
+  #diagramHost .placeholder p{line-height:1.5;}
+  #geoStage{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  #geoHost{width:100%;line-height:0;}
+  #geoHost svg{width:100%;height:auto;display:block;}
+  #geoHost .placeholder{padding:70px 20px;text-align:center;color:#9aa5ba;font-size:14px;line-height:0;}
+  #geoHost .placeholder p{line-height:1.5;}
+
+  #map{height:560px;border-radius:10px;border:1px solid var(--line);}
+  .toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .note{font-size:12px;color:#8a93a3;margin-top:8px;line-height:1.5;}
+  .canva-box{margin-top:14px;padding:14px 16px;background:#f5f8ff;border:1px solid #d7e3ff;border-radius:8px;font-size:12.5px;color:#33436b;line-height:1.6;}
+  .canva-box b{color:#1d4ed8;}
+
+  @media print{
+    header,.panel.controls,.toolbar,.canva-box{display:none !important;}
+    body{background:white;}
+    #diagramStage,#map{border:none;border-radius:0;}
+    .panel{box-shadow:none;border:none;padding:0;margin:0;}
+    @page{size:A3 landscape;margin:0;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="dot">📡</div>
+    <div>
+      <h1>Tower Placement Diagram Studio</h1>
+      <p>Upload your Lat/Long + Performance CSVs — everything renders locally in this browser.</p>
+    </div>
+  </div>
+  <div class="badge">No data leaves your device</div>
+</header>
+
+<div class="wrap">
+
+  <div class="panel controls">
+    <div class="panel-head"><h2><span class="step">1</span>Input files &amp; options</h2></div>
+    <div class="row">
+      <div class="field">
+        <label>Lat/Long CSV</label>
+        <input type="file" id="latlonFile" accept=".csv">
+      </div>
+      <div class="field">
+        <label>Performance CSV</label>
+        <input type="file" id="perfFile" accept=".csv">
+      </div>
+      <div class="field">
+        <label>Diagram title</label>
+        <input type="text" id="titleInput" value="TOWER PLACEMENT LOCATION DIAGRAM">
+      </div>
+      <button id="genBtn">Generate diagram</button>
+    </div>
+    <div id="status">Select both CSV files, then click Generate.</div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>Main Station</span>
+      <span><span class="swatch" style="background:#f5a623;border:2px solid #8a5200"></span>IBH (Block Hut)</span>
+      <span><span class="swatch" style="background:#3b82f6;border:2px solid #173f9e"></span>LC Gate</span>
+      <span><span class="lineswatch" style="background:#1e8e3e"></span>Good (RSSI mag. &lt; 70 dBm)</span>
+      <span><span class="lineswatch" style="background:#e8850c"></span>Fair (70&ndash;75 dBm)</span>
+      <span><span class="lineswatch" style="background:#c62828"></span>Poor (&gt; 75 dBm)</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2><span class="step">2</span>Tower placement diagram (schematic) — full-bleed 16:9</h2>
+    </div>
+    <div class="toolbar">
+      <button class="secondary" id="downloadSvgBtn" disabled>Download SVG</button>
+      <button class="secondary" id="downloadPngBtn" disabled>Download PNG (for Canva)</button>
+      <button class="secondary" id="printBtn" disabled>Print / Save as PDF (landscape, full page)</button>
+    </div>
+    <div id="diagramStage"><div id="diagramHost"><div class="placeholder"><p>Your diagram will render here, filling the full width edge-to-edge, after you click Generate.</p></div></div></div>
+    <p class="note">Stations that sit on a junction — where the route splits into two lines and rejoins later — are automatically detected and drawn as a labelled branch lane, connected back to the main line with dashed bridge connectors, instead of being silently dropped.</p>
+    <div class="canva-box">
+      <b>Using Canva?</b> Click <b>Download PNG</b> above, then in Canva choose <b>Create a design → Upload → your PNG</b> — it drops in at full resolution as a background you can layer text/branding over. The generated <b>.pptx</b> file can also be imported directly via Canva's <b>File → Import file</b> option if you're editing the deck itself.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2><span class="step">3</span>Geographic route map (SVG, landscape) — plotted on real coordinates</h2>
+    </div>
+    <div class="toolbar">
+      <button class="secondary" id="downloadGeoSvgBtn" disabled>Download Geo Map SVG</button>
+      <button class="secondary" id="downloadGeoPngBtn" disabled>Download Geo Map PNG</button>
+    </div>
+    <div id="geoStage"><div id="geoHost"><div class="placeholder"><p>The geographic map (true lat/lon positions, same icons/colours, FWD/REV + distance on every link) renders here after Generate.</p></div></div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2><span class="step">4</span>Interactive map (optional)</h2></div>
+    <div id="map"></div>
+    <p class="note">Live OpenStreetMap tiles (needs internet). Markers and link colours reuse the same station classification and RSSI thresholds as the diagrams above.</p>
+  </div>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let leafletMap = null;
+let lastState = null;
+const TOWER_ICON_B64 = "iVBORw0KGgoAAAANSUhEUgAAAKwAAACUCAYAAAAOGMIYAAAYN0lEQVR4nO1dT4zbxPef/eqL6pZW5k+KVpgVAkVUG/VAQAStKhe1qguHFoLgwiGHCgUEB3JAKntcxIX0VgmlIFBA/AmIS+sKCYGr1pSD20u2qpAXEFmBV1uvSg+sulKD9jDfw/6cXzx+Mx47zs7a6yd9DnYc5znz/ObN+zcTGGOUU05pof+IZiCnnKJQLrA5pYpygc0pVZQLbE6polxgc0oV5QKbU6ooF9icUkW5wOaUKsoFNqdUUS6wOaWKcoHNKVWUC2xOqaJcYHNKFf1XNANJ0tdff42vX7+OZmZm0PPPPz8hmp/NoG33zBjjTGBubg4jhAYwTROL5mncaLfbvmdut9uZf2bhDCSBZrPpGziEEJ6dnc384FUqlcBz67qe6edOvQ17/vx5/M477wTOz8zMCOBmc+nw4cOBc2+++SZaXFzMbla+6DdmFNi2jUul0rbUrh6q1Wrg+TVNy+zzC2dgFNRqtcBgNRqNzA4WBMdxMCS0WX1phTMQF61WKzBI1WoV93o9cKAcx6F+lgb0ej3sui7If7fbxaQ9WywWsWEYqX1eGoQzEAe2bWNN03wDVCqVqJ4B0zRxrVbDmqbhTqeTukFsNptY0zRcr9exbdsg/51OByuK4vtP6vU6VcjTCuEMxB1AUrs2m01wYCDtk6ZBNAwjYJ/S+G80Gpn3GghnICp6vR4uFAoB7Uq7vlwuBwbRsqzUDCL0clarVZB/x3GwLMvcAp5GCGcgiQGkmQLQYmTDMSL+OXjR6/XAZ5ibmwOfA/p/smTLCmcgMsPEYKiqCg4GGQXyFiJpXHiZpoklSQo8T7fbBZ+FvK5SqaTumanjL5qBKICEENKujuNg0hRQFCXV4Vro2WmmAXQtbbGWNghnIApIIaQ5yKFpsdVqgde6rosNw4ht17quiy3LwoZhYF3XsWEY2DRN7DhOpPu5rot1Xce6rnMvqgqFAuj1cF03YMtmxT8tnIEoA0oKITRYkMurWq2CAuS6Lm40GliSJFwqlSKtqHu9Hm61Wrher+NyuewTkFKphGu1Gm61WtyarV6vhwpXt9vFqqoGXFfQtWQyUNpsdxqEM8AL3mmOvI6mhTAOauJiscg1qLquB14KGlRVDc2ism2be0YgeVYUBVxUWZbFbfOmCcIZ4AUZhoWc4q7r4mFNxbLzTNOM5UGAXhwe0Fb1Ht/Qd6AX0rbtgF8Z8kH3ej2u69IG4QzwgrRfIa1lWVbAR0vTVJCAhGnCTqcTS1g9sOL7kN1N8y+TtqymaaBwz87Ocr28aYJwBnhg2zYuFou+Px+aBnVdD0yX0AIG0pJhySLQtB0HLE8FlMwDPScZ/UIIDoaQLxjNBZgmCGeAB7qu+zRnqVQCB4jUKDQvAin8qqqGRoMgYYoDltDYth3IB6A9A3kdZKeTgl0ul1Pphx5GKhK4l5eX0dra2uD4scceQ7Is+65ZWVnBv/76q+/cgQMHAvean5/Hf/zxh+/cG2+8gSYnJ6n1UCsrK/iLL76IxTtJ169fR+fPn8fQZ9PT0xNvvfWW79zPP/8M3uepp57yHf/++++Ba3bv3o1KpdLg+Pbt22hpaSkyz1uJUiGwN2/eRP1+f3C8d+9edO+99/quWV9fR7/88ovvXLlcDtzLMIzANY8//jjz98+ePRuRYzqtrq4iy7Konx88eBBJkjQ47vf7oICTPF+7di1wL1mWkaIog+N//vkH3bhxIwbXW4dSIbDDwooQQvfff39AI66vryNSc+7fvz9wL/KagwcPounpaWa16fz8fDSGQ2h5eZn6mSzLSFVV3zly5kBoY5YZphs3bqCVlRWfYO/YsQPdfffdg+O1tbXAf5k2SoXAkjSsgVj06KOPBgTx77//9h3v27cv9D5//vknH2OcdPv2bepn09PTE9407j0npBUfeeQR3/Hy8jJaX1/3ndu1axfau3fv4Ljf7weeP22Uir4Ed+7c8R3v3Llz5HtKkoT6/T665557Rr5X0rRz505UKBTQAw88gBBCAfMHoQ3tGYf27NkzEm+iKRUCSxIpwFFoz549SJIktGPHDtTv97mmyMnJydi/R+OBRXfu3EG3bt1Ct27dQggFTSKEEPr33399x0m8xGmgVJgE5GDw2mGkTTf8/dXVVYQQQo7jhN4n6ZLx++67j/rZ4uIitm3bdw7SsDdv3gzc86677vKdW19f9/1XkiRxm1NblVIhsOSfTNOwwytihBD67bffAteQwnLt2rXQOv4XX3yRi08ekiQJPf3009TPb968GfBkPPHEE4HryIXYgw8+GFiIrq2toZWVlcHx7t27c4HdDPJsOY/++uuvgJDt2rXL53NECCFSUyGEAsJy7ty5gLYiaXJyckLTtEg80+ihhx5Cr7zyCtUrcfnyZd+xJEnoyJEjgetJF97DDz8cuNfq6urArEBow+4dXoSlkVIhsIqioEKhMDi+cePGYEr3aHJycuLJJ5/0nfvxxx8D94KEpd1uh/Lw4YcfcvPLojNnzlA/W1hYCHSxee6558BrL1686DuGtPba2hpaXFwcHJN+2VSS6FAbD8hcAkmSwBg7GTtXFAUMQ5IZXQjxVZd2Oh2wVIUXYUnUUA0alHvQ7XYDfOS5BFsMZLYWFDu3LCuQaQ9dRyvs46k6aLVagXg/D8KSa6BsLVoeAZmcTcvWIu+ZZ2ttIkjtAwmA4zgYypvlFRBWufgwoiZwhzXvcByH+wVyXTfw21CuLdTCiJWTmxYIZ4AXpICVSiUw84hsYUTrCOO6bkC4NywkPn4cx8GGYQRKVoa1Wbvd5sqOgjQ+LY+33W77zAFJkkBzptvtxppBtjqEMxBFQMgBoJWGkJn2rBqp4WvjNFCj2bRRhWP45aHx0ev1AlqTVq8G9R4TPYZJQDgDUUDap7VaDRwEMi+WZstivPEitFqtWM0myIRxHlOEBdM0mYIepRqYbENK+6/SBuEMRAGkNWh1T+QirVwuJ16EB3XA9qAoSqK/B70ctEUUb0VCGiGcgSiAivWiLKpqtVrkfgEsASI1PomkerR2u93AC4gQ3RVHvki8i8k0QDgDUQFN97SFDbSSjzNVQ+ApmVFVNREtCz0HzS6HNHEaW4zSIJyBqIBWvzT7jFY4OGrbHl3XA0WRNIxaWg0VTJZKJWoNGum1KJfLic0qWwHCGYgDUsvSXDuecPFq5Li/H6ZlR3lBIIGl2aOQGZS1rZCEMxAHlmUFNJymaVRBHB70Ue1K0zQjR7pGFRpvxS9JErVM3DCMwAYlrBb6aYVwBuIC8hiwYvWO4yQyNULalfTFkouxJMqrLcuimgGQf1aW5cx138Y4xQILDVISNiML3W430FlG07SAtocWZONc+EAvUVa6FZIQzsAogKZnSZLGZrdBHQFN0wxo1FarFXiZxuVaguzWcrmcmX6wJIQzMCog00CW5cQd5VC838umIs+3Wi0MeTOS1rK0xnRpbtwcBuEMJAEovzXpjdWgHVo8HyvNLIFMliR5giJttFBtViCcgaRAOteT1mY07Qp95gks1KM1Sb7Ilyirux/6xkE0A0miXq9jVVUTz/tkaVeM6QKLcTAilrQtW6vVxvLMWxXCGdjqcF034BkgI2ssgSUTUSRJylSodLORiiJEkfT555/7Kk8RQujll1/m/v6+fftQrVYbHPf7ffT9998nxt92o1xgGbS4uIi/++4737larQZ2RaTR1NTUxKFDh3znLl68SG25mRObcoFl0A8//BDoz3ro0CE0NTXF7HZI0pEjR1C1Wh0cLy8vB8q0c+KjXGAptLi4iMm+BtVqFT3zzDOR7zU1NTVBtjv66quv0E8//ZRr2YiUCyyFrl69is6dO+c7d/ToUbCFJw+dPHlyolKpDI5v3bqVaKPk7UK5wAK0tLSEv/32W985VVVH7rH10ksv+Y5Pnz6Nrly5kmvZCJQLLEDz8/MB7Xrs2DHmPgg8dPLkycD3dV0f5ZbbjnKBBeiDDz4InIOELQ7Nzc35jt9//320sLCQa1lOygWWoAsXLmCy3SUpZKPQ66+/Hjj30UcfJXb/zJPoyMVWA1SdyroeavAR1gMgqxsXbwaEM7CVANXzs2L0rN0RWQnUUKpiUtW8WYdwBrYSoHQ9WrMKy7JCW2/SsqegF0OW5UxVt44LwhnYKoCEyAOZrAIV/EXRtJDZEabNc2xAOANbBazGGMONkXVdB7uwhAmtV0AIlbR4UFU1c1WuSUM4A1sBhmGENsZoNBo4SgMNyEY1TTP0uqxXDIwK4QxsBUCNOSD7lNaPgMyXpfWM5RH2LPYSSBLCGRANSLvOzs5iwzBCG2Z4bYBI4e52u5g19Q9r07m5ucD3s9atJUkIZ0A0SJ9osVgc9IplCd2w94D8zKtabbfbVKEf3peA1MisLjbbHds60jU/P4+//PJL37mZmRnfvliyLAe+12g00NmzZ0NDtSdOnJh47733fFs2eVQqlQa7iB87dsz3mWEYgX24ctqgbS2whmEEtqN/9dVXEUIInTlzBn/88ceB/cAQ2th1kJempqbA85999hl69913MUJwngKUz5AT2r4mgeM4gcVSpVLBGG+YAiz7tVAoMKtmPZPAdV2wndIwvAgXZH5ksTfWqBDOgChAAmJZFuZtpclrw/LeC+ounqXO2UlBOAPCHpwQDlVVwSZu6P9W81BLJG81Dwk+JICe1oTOl0ol8GWJs1lIliGcARGAsqVI88A7N+zIh3INer0euI0mZAp496LtWQChXC7jzfpf0gDhDAh5aA5BKRaLYA4BNJ2T9i6kKcltOC3L4t5NMdeyQ2MnmoHNBo9Dv1QqUbuz8DQ0hkDb5JhHaLOyx1YSEM7AZsJ1XWrYdNgMYK3OLcuKnPwSllPL2u/L0/a5lt2AcAY2E9DCKc70y6OlPfBsfQT17yKxHToT8kA4A5sFaHdrErxNkKEdtWmIkhfAyrHNtewGhDOwWWD5RIvFYuSO3bquh9qucWxP1kuVJ3hvE4F1HIfqY1VVNXZ7eVbSd6FQiNW63XVdDHUUR2gjvTEre8bGhXAGNgM0Z72maSNtrQlVzCZhczqOg6EmygiNd5ecNEA4A5sBSBOOukMhxuHbz49aVAhpWlmWt3XqoXAGxg1onwHPbo2bXOI4Dp6dnQ1d2WuaFvs3er0edWG3nbWscAbGDdZqPs5ugZ1OJ3JdV9RN3mzbDvVCiP5fRUE4A+METbuS4NlzgLbzYhTwuKUsywoNJIxqI6cZwhkYJ0gtJcsyVeho/lLXdakZVp5pQbq3WJGwRqNBtUFN0wS/WygUwPOi/18REM7AuADtROgJC20FTgqtZVlUF5N3P8gf2263cbPZpNq4lUolYIrQSs0VRcG6rmPIj7wdbVnhDIwLkKAN+0VpidqtVgv3ej3cbDap3V3I5Bjyc89XahgGVaPLsowbjQa2bZva70CW5QHPtm0H8iBUVaXu8J1VCGdgHDBNMyAA0MIHyouVZRlrmkaNYtXr9YA7jPViuK4LJn8PCx1Ns5JBAug+263xhnAGxgFIe9K8AbyJLCyPAktgPfR6vdBMMQ/lchkMaHS73cA9qtXqtmoiJ5yBpGGaZmAqD2tlyarj8qZu5p/IIbAeWL0KPPuWFX2DXrDt1Hgjc2XeV69eRbZtD44LhQIiN3bzaHFxEZ86dQp/8skn4Ofed99+++3E+Dtx4sTE8M6IJC0vLyPDMNDi4iKGPj9+/Dga3o0GIYQuXbqElpaWwOszR6LfmCQB1UrR+rvqus70qxaLxcH0W6lUmGFc8rssDctblauqaqSqh+1SEi6cgSTBqmz1YNs2hhZbwwJeqVRwpVLxTd2srC4egXVdl1pCzrJtG41G4HehDt7bpYxGOANJwXGcwGq7WCz6BrHT6TBDnp5GM00TjDZVKhVQGMME1nEcqj93dnYW93o93Ol0mHYt6Q0Ic9tlFcIZSAosl0+v16Pmw3palYw+QYs37yUgBYMlOKxcXDK8Ghb+1TRtoG2hvgc08ydLEM5AYg9CDJ4kSRhjdqVBuVxm2n6sJJTh79EEllVgyIpShXX59rweUMRulPzeNEA4A0kAcvU0Gg2qsEmSNJiKw+5t2zZV63lCS563LAvbtk2NlPGEVL0URlmWwXt4TT7I86qq5gK71UHTRLRplSc7ixQemtC2Wq1AzkCr1aIKa9TIVJjdDUXksqxlhTMwKnhKt72BbTabsasMaEkziqIEhIYW1o3r4LdtGzebTaq2JZFlj4FwBkYFT7hT07RESqTJWqtyuRxadeAhqlaHYJomV3l5nCrgtEA4A6Og3W7H3txtFDQaDVwqlbiEVZKkxJ36LD/yOJ97K0A4A6MgLFI1TluOllM7jHK5PLbmF6xFnffbWfTLCmcgLjqdDnVros1qOMEyR2RZ3pSklGazSXWBZTHBO5XJLysrK/jSpUuo3+/7zsuyjEqlEjpw4MBYf39hYQGfOnUKLywsUK9ZXV1F58+fRxcuXMDj5OX48eNo//794GfffPMNmp+fH+vvbzqJfmPiAOrTWigUcKVSwZIk4WKxOJbEZtd1cbvd5s5rRej/0xPHMT2bpjlwt8myDM44WUvwFs5AHJBxdEmSsKqqgTzTJE2DTqczUtWs1xI+qZKWTqfjMwUkSQLzbIvFYqYSvIUzEBVQcWGxWKQWFtZqtZEGzLZtXKvVuN1XYVBVdWTbluWThTLCsqRlhTMQFZCW89xGtHKXuCvmMPdRpVLBlmUFhMcwDGa1rSe4cXyltBezXC4PgiLQyyV63LalwELadXhreIzZnVl4nfedTodZxkKGd8nPvZfDsqxQ7exVzobx5Gl66B5kHy/Ixs+Kx0A4A1EARXkgp7xhGLH6UnkCxtKozWYzYGLQBNYDj/3bbreppothGOBCzws3Q3YxdL3o8dtWAmvbNihArOtpwkd2X+HZfXt2dpYaiAgTWIw3chHa7TZT21ar1cAL2Ol0qN9hzRhQt5osFCsKZ4AXkE0YFvJ0HAcsh5FlGddqNazrOm61Wkw3laZpofYvj8B66Ha71AUiQhvuuXq9jg3DoDbzGG6wwXp2cpbJQuqhcAZ40O12A3appmncq//hjK5CoTCwTxVFYWZAtdttLjdUFIH1YBgGs+mb97yyLPuuG962Pgxk8vpmRd+2vcBCGilq9pOu61hRFK5WmY1GI5IrLI7AeoDyaUkoioJLpVKstp2k7Zz21EPhDIQB2herWq1GzmtltWEf1mpxXE2jCKyHsEVZWDkPDWS+sCRJiaQ6isKWzyW4fPkymp+f9507evQomp6enuD5/tLSEv7000/x4cOH0enTp5nX7t+/HymKEp/ZEWhmZob5+fz8PHrhhRfQa6+9hq9cuYJ57/vss88iTdMGx/1+H126dCk+o6JJ9BvDQrfbDdh5mqZx9/gPa5YBgVbKzQJ5jyjft207NMhAQpblSNUTpAdEkqTU7vklnAEWoIpXnvwAy7KoTSuG70MLMrD2mk1SYFkVBF7vWVbOq6ZpXIsox3ECgZCo9vBWgXAGWH8yqV3DEjlc18Vzc3PMQSabrdGaZhQKBe7kmTgCyxLG4d/1non2PJIk4Wq1Gqoxs1ISLpwBGqBOKKyyj7CugIqiULUma8cWctv4JASWJoCSJFE1Jqvc3EO1WmW64cjr0+gxEM4ADVBuJ20gWW6hUqnErSlZXoSkmsHRXgxe21nX9dBCRFr4GTKTRt2rLBdYDNuupHa1bZtpp3qJ01HdVM1mE7RrWdvS8wgs1PJ9WDNG3Syu2WwyAw+qqgb4hXZuTFt7I+EMQICiT57t2uv1cKvVCm3lM0qlqq7roHAVCgVQe4UJLKv10ChJ3d7ikjXDeGFe7zuQOZKmnRWFM0ACsl09IWm320w7rlKp4E6nk0hWf7fbpf4WGQljCSytC4zXaiiJ/4y1+QdCG4vVubk53Ov1MGRCpcljIJwBEpBnoNls4nq9zuxBAKX9jQrXdakZX8MxffIzzwxpNBogz6NsG8oCq2Wnx3Oz2QxE/IrFYmpsWeEMkH841PaHNeVVKpWx1yzRbOVCoYCh9D+WCaAoytiFgxWIoNV+paXxhnAGhsHTnMKDqqqbGq0Jq0LgAY+LLCl4Jg1vP64oEUSREM7AMHgEVlVVYUV1lmVx9baCtOpmNfcgEdb9cPh/TUMgQTgDw2A1Hx61+2BSiBr7L5fLwrOjbNvGrVaLOUOkJYggnAESkDCMqxFFXLiuG1pS42mtrdRF0DRNaoplWpJhhDMAwXNfkT7ErQbWqnwr24SGYeBarYYrlQqu1WrCZ60oEM5A2mGaZqr9mmnD/wAql+bjCYg7+gAAAABJRU5ErkJggg==";
+const TOWER_ICON_WHITE_B64 = "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";
+
+
+function normKey(s){ return String(s).toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function cleanName(s){ return String(s).replace(/\s+/g,' ').trim(); }
+function firstFloat(s){ const m = String(s).match(/-?\d+\.?\d*/); return m ? parseFloat(m[0]) : null; }
+function classifyKind(name){
+  const n = name.toUpperCase();
+  if (n.includes('IBH')) return 'ibh';
+  if (n.includes('LC GATE') || n.includes('LC-GATE') || n.startsWith('LC ')) return 'lc';
+  return 'normal';
+}
+const COLORS = {
+  normal: ['#f6c945','#a97e00','#1a1200'],
+  ibh:    ['#f5a623','#8a5200','#1a1200'],
+  lc:     ['#3b82f6','#173f9e','#ffffff'],
+};
+// Good: |RSSI| < 70 dBm. Fair: 70-75 dBm. Poor: > 75 dBm.
+function rslColor(rsl){
+  const mag = Math.abs(rsl);
+  if (mag < 70) return '#1e8e3e';
+  if (mag <= 75) return '#e8850c';
+  return '#c62828';
+}
+function worstRslColor(rf, rr){
+  const order = {'#1e8e3e':0, '#e8850c':1, '#c62828':2};
+  const cf = rslColor(rf), cr = rslColor(rr);
+  return order[cr] >= order[cf] ? cr : cf;
+}
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371.0088, toRad = d=>d*Math.PI/180;
+  const dphi=toRad(lat2-lat1), dl=toRad(lon2-lon1);
+  const a=Math.sin(dphi/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function parseLatLon(rows){
+  let headerIdx = 0;
+  for (let i=0;i<Math.min(5,rows.length);i++){
+    const vals = rows[i].map(v=>String(v).toLowerCase());
+    if (vals.some(v=>v.includes('lat')) && vals.some(v=>v.includes('lon'))) { headerIdx = i; break; }
+  }
+  const header = rows[headerIdx].map(v=>String(v).toLowerCase().trim());
+  const nameIdx = header.findIndex(v=>v.includes('station')||v.includes('name'));
+  const latIdx  = header.findIndex(v=>v.includes('lat'));
+  const lonIdx  = header.findIndex(v=>v.includes('lon'));
+  if (nameIdx<0||latIdx<0||lonIdx<0) throw new Error('Could not detect Station/Lat/Lon columns.');
+  const out = {};
+  for (let r=headerIdx+1;r<rows.length;r++){
+    const row = rows[r];
+    if (!row || row.length<=Math.max(nameIdx,latIdx,lonIdx)) continue;
+    const name=row[nameIdx], lat=row[latIdx], lon=row[lonIdx];
+    if (name==='' || lat==='' || lon===undefined || lon==='') continue;
+    const latF=parseFloat(lat), lonF=parseFloat(lon);
+    if (isNaN(latF)||isNaN(lonF)) continue;
+    const clean = cleanName(name);
+    out[normKey(clean)] = {name:clean, lat:latF, lon:lonF};
+  }
+  return out;
+}
+
+function parsePerformance(rows){
+  let headerIdx = 0;
+  for (let i=0;i<Math.min(5,rows.length);i++){
+    const vals = rows[i].map(v=>String(v).toLowerCase());
+    if (vals.some(v=>v.includes('link')) || vals.some(v=>v.includes('distance'))) { headerIdx = i; break; }
+  }
+  const header = rows[headerIdx].map(v=>String(v).toLowerCase().trim());
+  const linkIdx = header.findIndex(v=>v.includes('link')||v.includes('name'));
+  const distIdx = header.findIndex(v=>v.includes('dist'));
+  const rslIdx  = header.findIndex(v=>v.includes('signal')||v.includes('rsl')||v.includes('dbm'));
+  const li = linkIdx<0?0:linkIdx, di = distIdx<0?1:distIdx, ri = rslIdx<0?2:rslIdx;
+
+  const rows2 = [];
+  for (let r=headerIdx+1;r<rows.length;r++){
+    const row = rows[r];
+    if (!row || row.length<=Math.max(li,di,ri)) continue;
+    const link = row[li];
+    if (!link) continue;
+    const text = String(link);
+    const lower = text.toLowerCase();
+    if (!lower.includes('towards')) continue;
+    const idx = lower.indexOf('towards');
+    const left = text.slice(0,idx).trim();
+    const right = text.slice(idx+'towards'.length).trim();
+    const fromName = left.replace(/^[\d\s\-]+/,'').trim();
+    const toName = right.replace(/[\-\s]+$/,'').trim();
+    const d = firstFloat(row[di]);
+    const rsl = firstFloat(row[ri]);
+    if (!fromName||!toName||d===null||rsl===null) continue;
+    rows2.push([fromName,toName,d,rsl]);
+  }
+  const groups = {}; const order = [];
+  for (const [fromName,toName,d,rsl] of rows2){
+    const fk=normKey(fromName), tk=normKey(toName);
+    const pairKey = [fk,tk].sort().join('|');
+    if (!(pairKey in groups)){ groups[pairKey]=[]; order.push(pairKey); }
+    groups[pairKey].push([fromName,toName,fk,tk,d,rsl]);
+  }
+  const hops = [];
+  for (const pk of order){
+    const entries = groups[pk];
+    const fwd = entries[0];
+    const rev = entries.length>1 ? entries[1] : entries[0];
+    hops.push({
+      from_key: fwd[2], from_name: cleanName(fwd[0]),
+      to_key: fwd[3], to_name: cleanName(fwd[1]),
+      dist_fwd: fwd[4], rsl_fwd: fwd[5],
+      dist_rev: rev[4], rsl_rev: rev[5],
+    });
+  }
+  return hops;
+}
+
+function buildTopology(latlon, hops){
+  const nodes = {}; const order = []; const warnings = [];
+  function ensure(key,name){
+    if (!(key in nodes)){
+      const info = latlon[key];
+      if (!info){ warnings.push(`No coordinates found for station "${name}"`); return false; }
+      nodes[key] = {name:info.name, lat:info.lat, lon:info.lon, kind:classifyKind(info.name)};
+      order.push(key);
+    }
+    return true;
+  }
+  const edges = [];
+  for (const h of hops){
+    const okA = ensure(h.from_key,h.from_name);
+    const okB = ensure(h.to_key,h.to_name);
+    if (!(okA&&okB)) continue;
+    edges.push([h.from_key,h.to_key,h.dist_fwd,h.rsl_fwd,h.dist_rev,h.rsl_rev]);
+  }
+  return {nodes, edges, order, warnings};
+}
+
+function resolveTopology(nodes, edges, order){
+  const adj = {};
+  for (const k in nodes) adj[k] = new Set();
+  for (const [a,b] of edges){ adj[a].add(b); adj[b].add(a); }
+
+  function bfs(start){
+    const dist = {[start]:0}, parent = {[start]:null};
+    const q = [start];
+    while (q.length){
+      const u = q.shift();
+      for (const v of adj[u]){
+        if (!(v in dist)){ dist[v]=dist[u]+1; parent[v]=u; q.push(v); }
+      }
+    }
+    return {dist, parent};
+  }
+  function reconstruct(parent, start, end){
+    const path=[end]; let cur=end;
+    while (cur!==start){ cur=parent[cur]; path.push(cur); }
+    path.reverse(); return path;
+  }
+
+  const degree = {}; for (const k in nodes) degree[k]=adj[k].size;
+  let endpoints = order.filter(k=>degree[k]<=1);
+  if (!endpoints.length) endpoints=[order[0]];
+
+  let best = {d:-1, s:endpoints[0], t:endpoints[0]};
+  for (const ep of endpoints){
+    const {dist} = bfs(ep);
+    for (const other of endpoints){
+      if (other in dist && dist[other] > best.d) best = {d:dist[other], s:ep, t:other};
+    }
+  }
+  if (best.d<=0 && order.length>1){
+    const {dist} = bfs(endpoints[0]);
+    let far=endpoints[0], fd=-1;
+    for (const k in dist) if (dist[k]>fd){ fd=dist[k]; far=k; }
+    best = {d:fd, s:endpoints[0], t:far};
+  }
+  const {s,t} = best;
+  const {dist:distS, parent:parentS} = bfs(s);
+  const backbone = (t in distS) ? reconstruct(parentS, s, t) : [s];
+  const backboneSet = new Set(backbone);
+
+  const usedEdges = new Set();
+  for (let i=0;i<backbone.length-1;i++) usedEdges.add([backbone[i],backbone[i+1]].sort().join('|'));
+
+  const leftover = order.filter(k=>!backboneSet.has(k));
+  const spurs = [];
+  const visitedLeftover = new Set();
+
+  for (const k of leftover){
+    if (visitedLeftover.has(k)) continue;
+    let chain = [k]; visitedLeftover.add(k);
+    let cur=k, prev=null;
+    while (true){
+      const nxts = [...adj[cur]].filter(n=>!backboneSet.has(n) && n!==prev && !visitedLeftover.has(n));
+      if (!nxts.length) break;
+      const nxt = nxts[0]; chain.push(nxt); visitedLeftover.add(nxt); prev=cur; cur=nxt;
+    }
+    cur=k; prev=null;
+    while (true){
+      const nxts = [...adj[cur]].filter(n=>!backboneSet.has(n) && n!==prev && !visitedLeftover.has(n));
+      if (!nxts.length) break;
+      const nxt = nxts[0]; chain.unshift(nxt); visitedLeftover.add(nxt); prev=cur; cur=nxt;
+    }
+    const head=chain[0], tail=chain[chain.length-1];
+    const fork = [...adj[head]].find(n=>backboneSet.has(n)) ?? null;
+    const rejoin = [...adj[tail]].find(n=>backboneSet.has(n) && n!==fork) ?? null;
+    for (let i=0;i<chain.length-1;i++) usedEdges.add([chain[i],chain[i+1]].sort().join('|'));
+    if (fork!==null) usedEdges.add([fork,head].sort().join('|'));
+    if (rejoin!==null) usedEdges.add([tail,rejoin].sort().join('|'));
+    spurs.push({chain, fork, rejoin});
+  }
+
+  const extraEdges = [];
+  const seen = new Set();
+  for (const [a,b] of edges){
+    const key = [a,b].sort().join('|');
+    if (usedEdges.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    extraEdges.push([a,b]);
+  }
+  return {backbone, spurs, extraEdges};
+}
+
+function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function chooseGrid(n, targetAspect, cellW, cellH){
+  let best = null;
+  for (let c=2;c<=n;c++){
+    const r = Math.ceil(n/c);
+    const aspect = (c*cellW)/(r*cellH);
+    const diff = Math.abs(aspect-targetAspect);
+    if (!best || diff < best.diff) best = {diff, c, r};
+  }
+  return [best.c, best.r];
+}
+
+function shortCode(name){
+  const m = name.match(/\(([A-Za-z0-9\-]+)\)/);
+  if (m) return m[1];
+  const tokens = name.replace('LC GATE','').trim().split(/\s+/);
+  return (tokens[0]||name).slice(0,8);
+}
+
+function towerIconSvg(cx,cy,size,kind){
+  const b64 = kind==='lc' ? TOWER_ICON_WHITE_B64 : TOWER_ICON_B64;
+  const x = cx-size/2, y = cy-size/2;
+  return `<image x="${x}" y="${y}" width="${size}" height="${size}" href="data:image/png;base64,${b64}" preserveAspectRatio="xMidYMid meet"/>`;
+}
+
+function chipSvg(cx,cy,lines,w,h){
+  let out = `<rect x="${cx-w/2}" y="${cy-h/2}" width="${w}" height="${h}" rx="8" fill="white" fill-opacity="0.95" stroke="#c7ccd6" stroke-width="1.2"/>`;
+  const n = lines.length, lineH = h/n;
+  lines.forEach(([text,color],i)=>{
+    const ty = cy - h/2 + lineH*(i+0.72);
+    out += `<text x="${cx}" y="${ty}" font-family="Arial,Helvetica,sans-serif" font-size="12.5" font-weight="700" text-anchor="middle" fill="${color}">${xmlEsc(text)}</text>`;
+  });
+  return out;
+}
+
+function nodeCircleSvg(cx, cy, R, key, nodes){
+  const n = nodes[key];
+  const [fill,stroke,textCol] = COLORS[n.kind];
+  let out = '';
+  if (n.kind === 'lc'){
+    const side = R*1.75;
+    out += `<rect x="${cx-side/2}" y="${cy-side/2}" width="${side}" height="${side}" rx="${side*0.16}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
+  } else {
+    out += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
+  }
+  out += towerIconSvg(cx, cy-R*0.32, R*0.85, n.kind);
+  const code = shortCode(n.name);
+  out += `<text x="${cx}" y="${cy+R*0.66}" font-family="Arial,Helvetica,sans-serif" font-size="${Math.max(10,R*0.28)}" font-weight="800" text-anchor="middle" fill="${textCol}">${xmlEsc(code.slice(0,9))}</text>`;
+  const nameY = cy + R + 20;
+  out += `<text x="${cx}" y="${nameY}" font-family="Arial,Helvetica,sans-serif" font-size="14.5" font-weight="700" text-anchor="middle" fill="#20242c">${xmlEsc(n.name.slice(0,18))}</text>`;
+  out += `<text x="${cx}" y="${nameY+15}" font-family="Courier New,monospace" font-size="10" text-anchor="middle" fill="#6b7280">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;
+  return out;
+}
+
+function buildSnakeSvg(nodes, edges, topo, title){
+  const {backbone, spurs, extraEdges} = topo;
+  const edgeLookup = {};
+  for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
+  const N = backbone.length;
+
+  const CANVAS_W = 1999, CANVAS_H = 1125;
+  const TITLE_BAR_H = 92, LEGEND_BAR_H = 72, PAD_X = 16, BRANCH_LANE_H = 200;
+  const nSpurs = spurs.length;
+  const branchBandH = BRANCH_LANE_H * nSpurs;
+  const diagramW = CANVAS_W - 2*PAD_X;
+  const diagramHTotal = CANVAS_H - TITLE_BAR_H - LEGEND_BAR_H;
+  const backboneH = diagramHTotal - branchBandH;
+  const targetAspect = diagramW/backboneH;
+
+  const [perRow] = chooseGrid(N, targetAspect, 168, 236);
+  const rows = [];
+  for (let i=0;i<N;i+=perRow) rows.push(backbone.slice(i,i+perRow));
+  const nRows = rows.length;
+  const colW = diagramW/perRow, rowH = backboneH/nRows;
+  const R = Math.min(colW,rowH)*0.19;
+
+  const positions = {};
+  function nodePos(idx){
+    const r = Math.floor(idx/perRow);
+    const posInRow = idx % perRow;
+    const thisRow = rows[r];
+    const reversedRow = (r % 2 === 1);
+    const displayCol = reversedRow ? (thisRow.length-1-posInRow) : posInRow;
+    const cx = PAD_X + colW*(displayCol+0.5);
+    const cy = TITLE_BAR_H + rowH*(r+0.5) - rowH*0.10;
+    return {r, cx, cy};
+  }
+  for (let i=0;i<N;i++){ const p=nodePos(i); positions[backbone[i]] = [p.cx, p.cy]; }
+
+  let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
+  elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
+  elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
+  elems.push(`<text x="${PAD_X+10}" y="66" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates</text>`);
+
+  let gpsTotal = 0;
+  for (let i=0;i<N-1;i++){
+    const a=backbone[i], b=backbone[i+1];
+    if ((a+'|'+b) in edgeLookup) gpsTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+  }
+  const nAll = Object.keys(nodes).length;
+  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${nAll} stations${nSpurs? ' ('+nSpurs+' branch)':''}</text>`);
+  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="64" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Main line: ${gpsTotal.toFixed(2)} KM</text>`);
+
+  // horizontal links (backbone)
+  for (let i=0;i<N-1;i++){
+    const a=backbone[i], b=backbone[i+1];
+    const pa=nodePos(i), pb=nodePos(i+1);
+    if (pa.r!==pb.r) continue;
+    const key=a+'|'+b;
+    if (!(key in edgeLookup)) continue;
+    const [df,rf,dr,rr] = edgeLookup[key];
+    const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    const fcolor = rslColor(rf), rcolor = rslColor(rr);
+    const x1 = Math.min(pa.cx,pb.cx), x2 = Math.max(pa.cx,pb.cx);
+    const y = pa.cy;
+    elems.push(`<line x1="${x1+R}" y1="${y-6}" x2="${x2-R}" y2="${y-6}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+    elems.push(`<line x1="${x1+R}" y1="${y+6}" x2="${x2-R}" y2="${y+6}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+    const mx=(x1+x2)/2;
+    const lines = [
+      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
+      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
+      [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+    ];
+    elems.push(chipSvg(mx, y-44, lines, 138, 66));
+  }
+
+  // vertical connectors (backbone row-wrap)
+  for (let i=0;i<N-1;i++){
+    const a=backbone[i], b=backbone[i+1];
+    const pa=nodePos(i), pb=nodePos(i+1);
+    if (pa.r===pb.r) continue;
+    const key=a+'|'+b;
+    if (!(key in edgeLookup)) continue;
+    const [df,rf,dr,rr] = edgeLookup[key];
+    const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    const fcolor = rslColor(rf), rcolor = rslColor(rr);
+    const xEdgeF = pa.cx - R - 16;
+    const xEdgeR = pa.cx - R - 30;
+    const y1=pa.cy, y2=pb.cy;
+    elems.push(`<line x1="${xEdgeF}" y1="${y1}" x2="${xEdgeF}" y2="${y2}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+    elems.push(`<line x1="${xEdgeR}" y1="${y1}" x2="${xEdgeR}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+    const xEdge = (xEdgeF+xEdgeR)/2;
+    const my=(y1+y2)/2;
+    elems.push(`<g transform="rotate(-90,${xEdge-46},${my})">` + chipSvg(xEdge-46, my, [
+      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
+      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
+      [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+    ], 190, 60) + '</g>');
+  }
+
+  // branch lanes
+  const laneY0 = TITLE_BAR_H + backboneH;
+  spurs.forEach((spur, sIdx)=>{
+    const {chain, fork, rejoin} = spur;
+    const laneCy = laneY0 + BRANCH_LANE_H*sIdx + BRANCH_LANE_H*0.55;
+    const m = chain.length;
+    const laneColW = diagramW / Math.max(m,1);
+    const laneR = Math.min(laneColW, BRANCH_LANE_H) * 0.16;
+
+    elems.push(`<rect x="0" y="${laneY0+BRANCH_LANE_H*sIdx}" width="${CANVAS_W}" height="${BRANCH_LANE_H}" fill="#fbf6ea"/>`);
+    elems.push(`<line x1="0" y1="${laneY0+BRANCH_LANE_H*sIdx}" x2="${CANVAS_W}" y2="${laneY0+BRANCH_LANE_H*sIdx}" stroke="#e7dcc0" stroke-width="1"/>`);
+    const label = `BRANCH ${sIdx+1}: splits at ${fork? nodes[fork].name : '?'}` + (rejoin? ` \u2192 rejoins at ${nodes[rejoin].name}` : ' (dead end)');
+    elems.push(`<text x="${PAD_X+10}" y="${laneY0+BRANCH_LANE_H*sIdx+18}" font-family="Arial" font-size="12.5" font-weight="800" fill="#8a5200">${xmlEsc(label)}</text>`);
+
+    const lanePositions = [];
+    chain.forEach((key,j)=>{
+      const cx = PAD_X + laneColW*(j+0.5);
+      positions[key] = [cx, laneCy];
+      lanePositions.push([cx, laneCy]);
+    });
+
+    for (let j=0;j<m-1;j++){
+      const a=chain[j], b=chain[j+1];
+      const key=a+'|'+b;
+      if (!(key in edgeLookup)) continue;
+      const [df,rf,dr,rr] = edgeLookup[key];
+      const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+      const fcolor = rslColor(rf), rcolor = rslColor(rr);
+      const x1=lanePositions[j][0], y=laneCy, x2=lanePositions[j+1][0];
+      elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+      elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+      const mx=(x1+x2)/2;
+      elems.push(chipSvg(mx, y-34, [
+        [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
+        [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
+        [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+      ], 122, 58));
+    }
+
+    if (fork!==null && fork in positions){
+      const [fx,fy] = positions[fork];
+      const [tx,ty] = lanePositions[0];
+      const mx_=(fx+tx)/2, my_=(fy+ty)/2-40;
+      elems.push(`<path d="M ${fx},${fy+R} C ${fx},${fy+R+80} ${tx},${ty-80} ${tx},${ty-laneR}" fill="none" stroke="#c07a00" stroke-width="3" stroke-dasharray="9,6"/>`);
+      const fkey = fork+'|'+chain[0];
+      if (fkey in edgeLookup){
+        const [df,rf,dr,rr] = edgeLookup[fkey];
+        const gps = haversineKm(nodes[fork].lat,nodes[fork].lon,nodes[chain[0]].lat,nodes[chain[0]].lon);
+        elems.push(chipSvg(mx_, my_, [
+          [`SPLIT FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+          [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+        ], 170, 56));
+      }
+    }
+    if (rejoin!==null && rejoin in positions){
+      const [rx_,ry_] = positions[rejoin];
+      const [tx,ty] = lanePositions[lanePositions.length-1];
+      const mx_=(rx_+tx)/2, my_=(ry_+ty)/2-40;
+      elems.push(`<path d="M ${tx},${ty-laneR} C ${tx},${ty-80} ${rx_},${ry_+R+80} ${rx_},${ry_+R}" fill="none" stroke="#8a5200" stroke-width="3" stroke-dasharray="9,6"/>`);
+      const rkey = chain[chain.length-1]+'|'+rejoin;
+      if (rkey in edgeLookup){
+        const [df,rf,dr,rr] = edgeLookup[rkey];
+        const gps = haversineKm(nodes[chain[chain.length-1]].lat,nodes[chain[chain.length-1]].lon,nodes[rejoin].lat,nodes[rejoin].lon);
+        elems.push(chipSvg(mx_, my_, [
+          [`REJOIN FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+          [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+        ], 180, 56));
+      }
+    }
+
+    chain.forEach(key=>{
+      const [cx,cy] = positions[key];
+      elems.push(nodeCircleSvg(cx, cy, laneR*1.4, key, nodes));
+    });
+  });
+
+  // extra bridging edges (neither backbone nor spur-internal)
+  for (const [a,b] of extraEdges){
+    if (a in positions && b in positions){
+      const [ax_,ay_] = positions[a], [bx_,by_] = positions[b];
+      elems.push(`<path d="M ${ax_},${ay_} C ${ax_},${(ay_+by_)/2} ${bx_},${(ay_+by_)/2} ${bx_},${by_}" fill="none" stroke="#999" stroke-width="2.5" stroke-dasharray="6,5"/>`);
+    }
+  }
+
+  // backbone nodes (drawn last, on top)
+  for (let i=0;i<N;i++){
+    const key=backbone[i];
+    const [cx,cy] = positions[key];
+    elems.push(nodeCircleSvg(cx, cy, R, key, nodes));
+  }
+
+  // legend bar
+  const ly = CANVAS_H - LEGEND_BAR_H;
+  elems.push(`<rect x="0" y="${ly}" width="${CANVAS_W}" height="${LEGEND_BAR_H}" fill="#f1f3f7"/>`);
+  elems.push(`<line x1="0" y1="${ly}" x2="${CANVAS_W}" y2="${ly}" stroke="#d7dbe3" stroke-width="1.5"/>`);
+
+  let lx = PAD_X+10;
+  elems.push(`<text x="${lx}" y="${ly+18}" font-family="Arial" font-size="10.5" font-weight="800" fill="#6b7280" letter-spacing="0.5">STATION TYPE</text>`);
+  const swY = ly + LEGEND_BAR_H - 20;
+  for (const [label,kindKey] of [['Main Station','normal'],['IBH (Block Hut)','ibh'],['LC Gate','lc']]){
+    const [fillc,strokec] = COLORS[kindKey];
+    if (kindKey==='lc'){
+      elems.push(`<rect x="${lx}" y="${swY-11}" width="22" height="22" rx="4" fill="${fillc}" stroke="${strokec}" stroke-width="3"/>`);
+    } else {
+      elems.push(`<circle cx="${lx+11}" cy="${swY}" r="12" fill="${fillc}" stroke="${strokec}" stroke-width="3"/>`);
+    }
+    elems.push(`<text x="${lx+30}" y="${swY+5}" font-family="Arial" font-size="15" font-weight="700" fill="#151c2c">${xmlEsc(label)}</text>`);
+    lx += 34 + label.length*9.3 + 34;
+  }
+
+  const dividerX = lx + 6;
+  elems.push(`<line x1="${dividerX}" y1="${ly+10}" x2="${dividerX}" y2="${ly+LEGEND_BAR_H-10}" stroke="#c7ccd6" stroke-width="1.5"/>`);
+
+  let rx = dividerX + 30;
+  elems.push(`<text x="${rx}" y="${ly+18}" font-family="Arial" font-size="10.5" font-weight="800" fill="#6b7280" letter-spacing="0.5">LINK QUALITY (RSSI)</text>`);
+  for (const [label,color] of [['Good \u2014 magnitude < 70 dBm','#1e8e3e'],['Fair \u2014 70\u201375 dBm','#e8850c'],['Poor \u2014 > 75 dBm','#c62828']]){
+    elems.push(`<line x1="${rx}" y1="${swY}" x2="${rx+36}" y2="${swY}" stroke="${color}" stroke-width="6" stroke-linecap="round"/>`);
+    elems.push(`<text x="${rx+46}" y="${swY+5}" font-family="Arial" font-size="15" font-weight="700" fill="#151c2c">${xmlEsc(label)}</text>`);
+    rx += 46 + label.length*8.4 + 30;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_W}" height="${CANVAS_H}" viewBox="0 0 ${CANVAS_W} ${CANVAS_H}">\n${elems.join('\n')}\n</svg>`;
+  return {svg, gpsTotal};
+}
+
+function nodeMarkerSvg(x, y, R, key, nodes){
+  const n = nodes[key];
+  const [fill,stroke] = COLORS[n.kind];
+  if (n.kind === 'lc'){
+    const side = R*1.75;
+    return `<rect x="${x-side/2}" y="${y-side/2}" width="${side}" height="${side}" rx="${side*0.16}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
+  }
+  return `<circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
+}
+
+function labelHalo(cx, cy, text, fontSize, anchor){
+  const approxW = text.length*fontSize*0.62 + 12;
+  const approxH = fontSize + 10;
+  let rx0;
+  if (anchor==='start') rx0 = cx - 6;
+  else if (anchor==='end') rx0 = cx - approxW + 6;
+  else rx0 = cx - approxW/2;
+  const ry0 = cy - approxH*0.72;
+  const svg = `<rect x="${rx0}" y="${ry0}" width="${approxW}" height="${approxH}" rx="5" fill="white" fill-opacity="0.82"/>` +
+    `<text x="${cx}" y="${cy}" font-family="Arial" font-size="${fontSize}" font-weight="700" text-anchor="${anchor}" fill="#151c2c">${xmlEsc(text)}</text>`;
+  return [svg, [rx0, ry0, approxW, approxH]];
+}
+
+function boxesOverlap(a, b, pad){
+  pad = pad===undefined?2:pad;
+  const [ax,ay,aw,ah]=a, [bx,by,bw,bh]=b;
+  return !(ax+aw+pad<bx || bx+bw+pad<ax || ay+ah+pad<by || by+bh+pad<ay);
+}
+
+function placeLabel(cx, cy, R, text, fontSize, placedBoxes){
+  const candidates = [
+    [0,-R-12,'middle'], [0,R+22,'middle'],
+    [R+10,-R*0.3,'start'], [-R-10,-R*0.3,'end'],
+    [R+8,-R-6,'start'], [-R-8,-R-6,'end'],
+    [R+8,R+18,'start'], [-R-8,R+18,'end'],
+  ];
+  for (const [dx,dy,anchor] of candidates){
+    const [svg, bbox] = labelHalo(cx+dx, cy+dy, text, fontSize, anchor);
+    if (!placedBoxes.some(pb=>boxesOverlap(bbox, pb))){
+      placedBoxes.push(bbox);
+      return svg;
+    }
+  }
+  const [dx,dy,anchor] = candidates[0];
+  const [svg, bbox] = labelHalo(cx+dx, cy+dy, text, fontSize, anchor);
+  placedBoxes.push(bbox);
+  return svg;
+}
+
+function buildGeoSvg(nodes, edges, title){
+  const CANVAS_W = 1999, CANVAS_H = 1125;
+  const TITLE_BAR_H = 96, LEGEND_BAR_H = 64, PAD = 60;
+
+  const lats = Object.values(nodes).map(n=>n.lat);
+  const lons = Object.values(nodes).map(n=>n.lon);
+  const latMin=Math.min(...lats), latMax=Math.max(...lats);
+  const lonMin=Math.min(...lons), lonMax=Math.max(...lons);
+  const latSpan = Math.max(latMax-latMin, 1e-6);
+
+  const plotW = CANVAS_W - 2*PAD;
+  const plotH = CANVAS_H - TITLE_BAR_H - LEGEND_BAR_H - PAD;
+  const latMidRad = (latMin+latMax)/2 * Math.PI/180;
+  const geoW = (lonMax-lonMin) * Math.cos(latMidRad) || 1e-6;
+  const geoH = latSpan;
+  const scale = Math.min(plotW/geoW, plotH/geoH);
+  const usedW = geoW*scale, usedH = geoH*scale;
+  const offX = PAD + (plotW-usedW)/2;
+  const offY = TITLE_BAR_H + (plotH-usedH)/2;
+
+  function project(lat, lon){
+    const x = offX + (lon-lonMin)*Math.cos(latMidRad)*scale;
+    const y = offY + (latMax-lat)*scale;
+    return [x,y];
+  }
+  for (const k in nodes){
+    const n = nodes[k];
+    [n._x, n._y] = project(n.lat, n.lon);
+  }
+
+  const keys = Object.keys(nodes);
+  const nearest = {};
+  for (const k of keys){
+    let best = 1e9;
+    for (const k2 of keys){
+      if (k===k2) continue;
+      const d = Math.hypot(nodes[k]._x-nodes[k2]._x, nodes[k]._y-nodes[k2]._y);
+      best = Math.min(best, d);
+    }
+    nearest[k] = best;
+  }
+
+  let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
+  elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
+  elems.push(`<text x="${PAD-44}" y="40" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
+  elems.push(`<text x="${PAD-44}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">Plotted from actual station coordinates \u2014 link labels show FWD / REV received signal (dBm) and GPS distance (KM)</text>`);
+
+  let totalGps = 0;
+  const seenPairs = new Set();
+  for (const [a,b,df,rf,dr,rr] of edges){
+    const fs = [a,b].sort().join('|');
+    if (seenPairs.has(fs)) continue;
+    seenPairs.add(fs);
+    const na=nodes[a], nb=nodes[b];
+    const gps = haversineKm(na.lat,na.lon,nb.lat,nb.lon);
+    totalGps += gps;
+    const fcolor = rslColor(rf), rcolor = rslColor(rr);
+    const [x1,y1] = [na._x, na._y], [x2,y2] = [nb._x, nb._y];
+    const dx=x2-x1, dy=y2-y1, length=Math.max(Math.hypot(dx,dy),1e-6);
+    const nx=-dy/length*4.5, ny=dx/length*4.5;
+    elems.push(`<line x1="${x1+nx}" y1="${y1+ny}" x2="${x2+nx}" y2="${y2+ny}" stroke="${fcolor}" stroke-width="4" stroke-linecap="round"/>`);
+    elems.push(`<line x1="${x1-nx}" y1="${y1-ny}" x2="${x2-nx}" y2="${y2-ny}" stroke="${rcolor}" stroke-width="4" stroke-linecap="round"/>`);
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    if (length < 130){
+      elems.push(chipSvg(mx, my, [[`F${rf.toFixed(0)}/${df.toFixed(1)}km \u00b7 R${rr.toFixed(0)}/${dr.toFixed(1)}km`, fcolor]], 148, 24));
+    } else {
+      elems.push(chipSvg(mx, my, [[`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],[`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],[`GPS ${gps.toFixed(2)} KM`,'#0066cc']], 148, 62));
+    }
+  }
+
+  const placedLabelBoxes = [];
+  const sortedKeys = keys.slice().sort((a,b)=>nodes[a]._x-nodes[b]._x);
+  for (const key of sortedKeys){
+    const n = nodes[key];
+    const x=n._x, y=n._y;
+    const crowded = nearest[key] < 75;
+    const R = crowded ? 19 : 26;
+    elems.push(nodeMarkerSvg(x, y, R, key, nodes));
+    elems.push(towerIconSvg(x, y-R*0.32, R*0.85, n.kind));
+    const fontSz = crowded ? 12.5 : 14;
+    elems.push(placeLabel(x, y, R, n.name, fontSz, placedLabelBoxes));
+  }
+
+  const nStations = Object.keys(nodes).length;
+  elems.push(`<text x="${CANVAS_W-PAD+44}" y="40" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${nStations} stations</text>`);
+  elems.push(`<text x="${CANVAS_W-PAD+44}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Total surveyed: ${totalGps.toFixed(2)} KM</text>`);
+
+  const ly = CANVAS_H - LEGEND_BAR_H;
+  elems.push(`<rect x="0" y="${ly}" width="${CANVAS_W}" height="${LEGEND_BAR_H}" fill="#f1f3f7"/>`);
+  elems.push(`<line x1="0" y1="${ly}" x2="${CANVAS_W}" y2="${ly}" stroke="#d7dbe3" stroke-width="1"/>`);
+  let lx = 24;
+  for (const [label,kindKey] of [['Main Station','normal'],['IBH (Block Hut)','ibh'],['LC Gate (square)','lc']]){
+    const [fillc,strokec] = COLORS[kindKey];
+    if (kindKey==='lc'){
+      elems.push(`<rect x="${lx-2}" y="${ly+LEGEND_BAR_H/2-10}" width="20" height="20" rx="4" fill="${fillc}" stroke="${strokec}" stroke-width="2"/>`);
+    } else {
+      elems.push(`<circle cx="${lx+8}" cy="${ly+LEGEND_BAR_H/2}" r="10" fill="${fillc}" stroke="${strokec}" stroke-width="2"/>`);
+    }
+    elems.push(`<text x="${lx+26}" y="${ly+LEGEND_BAR_H/2+5}" font-family="Arial" font-size="14" font-weight="600" fill="#20242c">${xmlEsc(label)}</text>`);
+    lx += 20 + label.length*8.6 + 34;
+  }
+  let rx = CANVAS_W*0.52;
+  for (const [label,color] of [['Good (RSSI magnitude < 70 dBm)','#1e8e3e'],['Fair (70\u201375 dBm)','#e8850c'],['Poor (> 75 dBm)','#c62828']]){
+    elems.push(`<line x1="${rx}" y1="${ly+LEGEND_BAR_H/2}" x2="${rx+34}" y2="${ly+LEGEND_BAR_H/2}" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`);
+    elems.push(`<text x="${rx+42}" y="${ly+LEGEND_BAR_H/2+5}" font-family="Arial" font-size="14" font-weight="600" fill="#20242c">${xmlEsc(label)}</text>`);
+    rx += 42 + label.length*7.6 + 26;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_W}" height="${CANVAS_H}" viewBox="0 0 ${CANVAS_W} ${CANVAS_H}">\n${elems.join('\n')}\n</svg>`;
+  return {svg, totalGps};
+}
+
+function readCsvFile(file){
+  return new Promise((resolve,reject)=>{
+    Papa.parse(file, { complete: (res)=>resolve(res.data), error: reject, skipEmptyLines:true });
+  });
+}
+
+function renderMap(nodes, edges, seq){
+  if (leafletMap){ leafletMap.remove(); }
+  leafletMap = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(leafletMap);
+
+  const edgeLookup = {};
+  for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
+
+  const bounds = [];
+  for (let i=0;i<seq.length-1;i++){
+    const a=seq[i], b=seq[i+1];
+    const na=nodes[a], nb=nodes[b];
+    const key=a+'|'+b;
+    const rf = (key in edgeLookup) ? edgeLookup[key][1] : -70;
+    L.polyline([[na.lat,na.lon],[nb.lat,nb.lon]], {color: rslColor(rf), weight:5}).addTo(leafletMap);
+  }
+  for (const key of seq){
+    const n = nodes[key];
+    const [fill] = COLORS[n.kind];
+    L.circleMarker([n.lat,n.lon], {radius:9, color:'#222', weight:1.5, fillColor:fill, fillOpacity:0.95})
+      .bindPopup(`<b>${n.name}</b><br>${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}`)
+      .addTo(leafletMap);
+    bounds.push([n.lat,n.lon]);
+  }
+  leafletMap.fitBounds(bounds, {padding:[30,30]});
+}
+
+function downloadSvgBlob(svgText, filename){
+  const blob = new Blob([svgText], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadSvgAsPng(svgText, filename){
+  const img = new Image();
+  const svgBlob = new Blob([svgText], {type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(svgBlob);
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1999 * 2; canvas.height = 1125 * 2; // 2x for crisp Canva import
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob((blob)=>{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    }, 'image/png');
+  };
+  img.src = url;
+}
+
+document.getElementById('genBtn').addEventListener('click', async ()=>{
+  const status = $('status');
+  status.classList.remove('err','ok');
+  const latlonFile = $('latlonFile').files[0];
+  const perfFile = $('perfFile').files[0];
+  if (!latlonFile || !perfFile){ status.textContent='Please choose both CSV files.'; status.classList.add('err'); return; }
+  try{
+    status.textContent = 'Parsing files...';
+    const latlonRows = await readCsvFile(latlonFile);
+    const perfRows = await readCsvFile(perfFile);
+    const latlon = parseLatLon(latlonRows);
+    const hops = parsePerformance(perfRows);
+    const {nodes, edges, order, warnings} = buildTopology(latlon, hops);
+    if (Object.keys(nodes).length===0) throw new Error('No matching stations found between the two files — check spelling.');
+    const topo = resolveTopology(nodes, edges, order);
+    const title = $('titleInput').value.trim() || 'TOWER PLACEMENT LOCATION DIAGRAM';
+
+    const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, topo, title);
+    $('diagramHost').innerHTML = svg;
+    $('downloadSvgBtn').disabled = false;
+    $('downloadPngBtn').disabled = false;
+    $('printBtn').disabled = false;
+
+    const geoTitle = 'GEOGRAPHIC ROUTE MAP \u2014 ' + title.replace(/^TOWER PLACEMENT LOCATION DIAGRAM\s*/i,'').trim();
+    const {svg: geoSvg} = buildGeoSvg(nodes, edges, geoTitle || 'GEOGRAPHIC ROUTE MAP');
+    $('geoHost').innerHTML = geoSvg;
+    $('downloadGeoSvgBtn').disabled = false;
+    $('downloadGeoPngBtn').disabled = false;
+
+    renderMap(nodes, edges, [...topo.backbone, ...topo.spurs.flatMap(s=>s.chain)]);
+
+    const nSpurs = topo.spurs.length;
+    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsTotal.toFixed(2)} KM.` + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
+    status.classList.add('ok');
+    lastState = {svg, geoSvg};
+  } catch(e){
+    status.textContent = 'Error: ' + e.message;
+    status.classList.add('err');
+    console.error(e);
+  }
+});
+
+$('downloadSvgBtn').addEventListener('click', ()=>{
+  if (!lastState) return;
+  downloadSvgBlob(lastState.svg, 'tower_placement_diagram.svg');
+});
+
+$('downloadPngBtn').addEventListener('click', ()=>{
+  if (!lastState) return;
+  downloadSvgAsPng(lastState.svg, 'tower_placement_diagram.png');
+});
+
+$('downloadGeoSvgBtn').addEventListener('click', ()=>{
+  if (!lastState) return;
+  downloadSvgBlob(lastState.geoSvg, 'geographic_route_map.svg');
+});
+
+$('downloadGeoPngBtn').addEventListener('click', ()=>{
+  if (!lastState) return;
+  downloadSvgAsPng(lastState.geoSvg, 'geographic_route_map.png');
+});
+
+$('printBtn').addEventListener('click', ()=> window.print());
+</script>
+</body>
+</html>
