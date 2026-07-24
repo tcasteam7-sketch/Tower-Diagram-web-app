@@ -528,7 +528,8 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
     const posInRow = idx % perRow;
     const thisRow = rows[r];
     const reversedRow = (r % 2 === 1);
-    const displayCol = reversedRow ? (perRow - 1 - posInRow) : posInRow;    const cx = PAD_X + colW*(displayCol+0.5);
+    const displayCol = reversedRow ? (perRow - 1 - posInRow) : posInRow;
+    const cx = PAD_X + colW*(displayCol+0.5);
     const cy = TITLE_BAR_H + rowH*(r+0.5) - rowH*0.10;
     return {r, cx, cy};
   }
