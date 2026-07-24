@@ -528,8 +528,7 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
     const posInRow = idx % perRow;
     const thisRow = rows[r];
     const reversedRow = (r % 2 === 1);
-    const displayCol = reversedRow ? (perRow - 1 - posInRow) : posInRow;
-    const cx = PAD_X + colW*(displayCol+0.5);
+    const displayCol = reversedRow ? (perRow - 1 - posInRow) : posInRow;    const cx = PAD_X + colW*(displayCol+0.5);
     const cy = TITLE_BAR_H + rowH*(r+0.5) - rowH*0.10;
     return {r, cx, cy};
   }
@@ -543,7 +542,7 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
   let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
   elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
   elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
-  elems.push(`<text x="${PAD_X+10}" y="66" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#aab4c8" font-style="italic">${hasPerf ? 'FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates' : 'Tower placement only \u2014 no Performance CSV supplied, so no RSSI or link-distance readings are shown'}</text>`);
+  elems.push(`<text x="${PAD_X+10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" fill="#aab4c8" font-style="italic">${hasPerf ? 'FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates' : 'Tower placement only \u2014 no Performance CSV supplied, so no RSSI or link-distance readings are shown'}</text>`);
 
   let gpsTotal = 0;
   for (let i=0;i<N-1;i++){
@@ -552,7 +551,7 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
   }
   const nAll = Object.keys(nodes).length;
   elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${nAll} stations${nSpurs? ' ('+nSpurs+' branch)':''}</text>`);
-  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="64" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Main line: ${gpsTotal.toFixed(2)} KM</text>`);
+  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Main line: ${gpsTotal.toFixed(2)} KM</text>`);
 
   // horizontal links (backbone)
   for (let i=0;i<N-1;i++){
@@ -578,7 +577,12 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
       [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
       [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
     ];
-    elems.push(placeReading(mx, y-28, lines, 12.5, readingBoxes));
+    // Lines sit at y±6 (stroke-width 4.5, so outer edge of the near line is
+    // y-6-2.25 = y-8.25). The 3-line block is 58px tall (half-height 29px).
+    // Center it at y-46 so its bottom edge clears the line with an ~8px gap,
+    // instead of the old y-28 which drove the block's bottom edge well past
+    // the lines.
+    elems.push(placeReading(mx, y-46, lines, 12.5, readingBoxes));
   }
 
 // vertical connectors (backbone row-wrap)
@@ -652,7 +656,11 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
       elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       const mx=(x1+x2)/2;
-      elems.push(placeReading(mx, y-24, [
+      // Same fix as the main backbone links: lines sit at y±5 (stroke-width
+      // 3.5, outer edge of the near line is y-5-1.75=y-6.75); the 3-line
+      // block is 58px tall (half-height 29). Lift to y-44 so the block
+      // actually clears the lines instead of overlapping them.
+      elems.push(placeReading(mx, y-44, [
         [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
         [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
         [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
@@ -877,10 +885,21 @@ function buildGeoSvg(nodes, edges, title){
     elems.push(`<line x1="${x1+nx}" y1="${y1+ny}" x2="${x2+nx}" y2="${y2+ny}" stroke="${fcolor}" stroke-width="4" stroke-linecap="round"/>`);
     elems.push(`<line x1="${x1-nx}" y1="${y1-ny}" x2="${x2-nx}" y2="${y2-ny}" stroke="${rcolor}" stroke-width="4" stroke-linecap="round"/>`);
     const mx=(x1+x2)/2, my=(y1+y2)/2;
+    const CLEAR_GAP = 10; // real gap left between the bottom of the text block and the line
+    // The block was previously centered ON the line (half the text sat below it,
+    // overlapping the line). Lift its center up by half its own height plus a gap,
+    // so the whole block sits above the line instead of straddling it.
+    function liftFor(numLines, fontSize){
+      const lineH = fontSize + 5.5;
+      const h = lineH*numLines + 4;
+      return h/2 + CLEAR_GAP;
+    }
     if (length < 130){
-      elems.push(placeReading(mx, my, [[`F${rf.toFixed(0)}/${df.toFixed(1)}km \u00b7 R${rr.toFixed(0)}/${dr.toFixed(1)}km`, fcolor]], 11.5, placedLabelBoxes));
+      const fontSize = 11.5;
+      elems.push(placeReading(mx, my-liftFor(1,fontSize), [[`F${rf.toFixed(0)}/${df.toFixed(1)}km \u00b7 R${rr.toFixed(0)}/${dr.toFixed(1)}km`, fcolor]], fontSize, placedLabelBoxes));
     } else {
-      elems.push(placeReading(mx, my, [[`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],[`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],[`GPS ${gps.toFixed(2)} KM`,'#0066cc']], 12.5, placedLabelBoxes));
+      const fontSize = 12.5;
+      elems.push(placeReading(mx, my-liftFor(3,fontSize), [[`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],[`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],[`GPS ${gps.toFixed(2)} KM`,'#0066cc']], fontSize, placedLabelBoxes));
     }
   }
 
