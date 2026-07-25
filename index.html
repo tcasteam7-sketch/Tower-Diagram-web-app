@@ -948,33 +948,46 @@ function readCsvFile(file){
   });
 }
 
-function renderMap(nodes, edges, seq){
+function renderMap(nodes, edges, topo){
   if (leafletMap){ leafletMap.remove(); }
   leafletMap = L.map('map');
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
   }).addTo(leafletMap);
 
-  const edgeLookup = {};
-  for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
-
   const bounds = [];
-  for (let i=0;i<seq.length-1;i++){
-    const a=seq[i], b=seq[i+1];
-    const na=nodes[a], nb=nodes[b];
-    const key=a+'|'+b;
-    const rf = (key in edgeLookup) ? edgeLookup[key][1] : -70;
-    L.polyline([[na.lat,na.lon],[nb.lat,nb.lon]], {color: rslColor(rf), weight:5}).addTo(leafletMap);
+  
+  // Draw actual valid links based on 'edges' to avoid fake lines jumping to branches
+  for (const [a,b,df,rf,dr,rr] of edges){
+    const na = nodes[a], nb = nodes[b];
+    if (na && nb) {
+      L.polyline([[na.lat,na.lon], [nb.lat,nb.lon]], {color: rslColor(rf), weight:5}).addTo(leafletMap);
+    }
   }
-  for (const key of seq){
+  
+  // Get all stations to plot markers
+  const allKeys = [...topo.backbone, ...topo.spurs.flatMap(s=>s.chain)];
+  const startKey = topo.backbone[0];
+  const endKey = topo.backbone[topo.backbone.length - 1];
+
+  for (const key of allKeys){
     const n = nodes[key];
     const [fill] = COLORS[n.kind];
-    L.circleMarker([n.lat,n.lon], {radius:9, color:'#222', weight:1.5, fillColor:fill, fillOpacity:0.95})
-      .bindPopup(`<b>${n.name}</b><br>${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}`)
-      .addTo(leafletMap);
+    const marker = L.circleMarker([n.lat,n.lon], {radius:9, color:'#222', weight:1.5, fillColor:fill, fillOpacity:0.95})
+      .bindPopup(`<b>${n.name}</b><br>${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}`);
+      
+    // Add permanent visible labels for Start and End stations
+    if (key === startKey) {
+      marker.bindTooltip(`<b>START:</b> ${n.name}`, {permanent: true, direction: 'right', offset: [10, 0]});
+    } else if (key === endKey && key !== startKey) {
+      marker.bindTooltip(`<b>END:</b> ${n.name}`, {permanent: true, direction: 'left', offset: [-10, 0]});
+    }
+    
+    marker.addTo(leafletMap);
     bounds.push([n.lat,n.lon]);
   }
-  leafletMap.fitBounds(bounds, {padding:[30,30]});
+  
+  if(bounds.length) leafletMap.fitBounds(bounds, {padding:[40,40]});
 }
 
 function downloadSvgBlob(svgText, filename){
@@ -1036,7 +1049,7 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     $('downloadPngBtn').disabled = false;
     $('printBtn').disabled = false;
 
-    renderMap(nodes, edges, [...topo.backbone, ...topo.spurs.flatMap(s=>s.chain)]);
+    renderMap(nodes, edges, topo);
 
     const nSpurs = topo.spurs.length;
     status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsTotal.toFixed(2)} KM.` + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
