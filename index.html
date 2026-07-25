@@ -495,8 +495,8 @@ function nodeCircleSvg(cx, cy, R, key, nodes){
   const code = shortCode(n.name);
   out += `<text x="${cx}" y="${cy+R*0.66}" font-family="Arial,Helvetica,sans-serif" font-size="${Math.max(10,R*0.28)}" font-weight="800" text-anchor="middle" fill="${textCol}">${xmlEsc(code.slice(0,9))}</text>`;
   const nameY = cy + R + 20;
-  out += `<text x="${cx}" y="${nameY}" font-family="Arial,Helvetica,sans-serif" font-size="14.5" font-weight="700" text-anchor="middle" fill="#20242c">${xmlEsc(n.name.slice(0,18))}</text>`;
-  out += `<text x="${cx}" y="${nameY+15}" font-family="Courier New,monospace" font-size="10" text-anchor="middle" fill="#6b7280">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;
+  out += `<text x="${cx}" y="${nameY}" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#20242c">${xmlEsc(n.name.slice(0,18))}</text>`;
+  out += `<text x="${cx}" y="${nameY+18}" font-family="Courier New,monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0055cc">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;
   return out;
 }
 
