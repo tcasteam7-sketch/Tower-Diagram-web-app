@@ -495,9 +495,8 @@ function nodeCircleSvg(cx, cy, R, key, nodes){
   const code = shortCode(n.name);
   out += `<text x="${cx}" y="${cy+R*0.66}" font-family="Arial,Helvetica,sans-serif" font-size="${Math.max(8,R*0.28)}" font-weight="800" text-anchor="middle" fill="${textCol}">${xmlEsc(code.slice(0,9))}</text>`;
   const nameY = cy + R + 20;
-  out += `<text x="${cx}" y="${nameY}" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#20242c">${xmlEsc(n.name.slice(0,18))}</text>`;
-  out += `<text x="${cx}" y="${nameY+18}" font-family="Courier New,monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0055cc">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;
-  return out;
+  out += `<text x="${cx}" y="${nameY}" font-family="Arial,Helvetica,sans-serif" font-size="14.5" font-weight="700" text-anchor="middle" fill="#20242c" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke fill">${xmlEsc(n.name.slice(0,18))}</text>`;
+  out += `<text x="${cx}" y="${nameY+18}" font-family="Courier New,monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0055cc" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke fill">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;  return out;
 }
 
 function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
