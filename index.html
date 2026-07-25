@@ -55,6 +55,9 @@
   #diagramHost svg{width:100%;height:auto;display:block;}
   #diagramHost .placeholder{padding:70px 20px;text-align:center;color:#9aa5ba;font-size:14px;line-height:0;}
   #diagramHost .placeholder p{line-height:1.5;}
+  .diagram-page{margin-bottom:18px;}
+  .diagram-page:last-child{margin-bottom:0;}
+  .page-tag{font-size:11.5px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px 2px;line-height:1.4;}
 
 
   #map{height:560px;border-radius:10px;border:1px solid var(--line);}
@@ -78,6 +81,19 @@
     /* Drop panel section headings and helper text — just the diagram and map. */
     .panel-head, .note, .canva-box {
       display: none !important;
+    }
+    .page-tag { display: none !important; }
+
+    /* Each generated diagram page prints on its own sheet */
+    .diagram-page {
+      page-break-after: always !important;
+      break-after: page !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .diagram-page:last-child {
+      page-break-after: auto !important;
+      break-after: auto !important;
     }
 
     /* Target the map container */
@@ -126,7 +142,7 @@
       </div>
       <button id="genBtn">Generate diagram</button>
     </div>
-    <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. Then click Generate.</div>
+    <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. Diagrams with more than 27 stations are automatically split across multiple full-size pages to avoid crowding. Then click Generate.</div>
     <div class="legend">
       <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>Main Station</span>
       <span><span class="swatch" style="background:#f5a623;border:2px solid #8a5200"></span>IBH (Block Hut)</span>
@@ -147,7 +163,7 @@
       <button class="secondary" id="printBtn" disabled>Print / Save as PDF (landscape, full page)</button>
     </div>
     <div id="diagramStage"><div id="diagramHost"><div class="placeholder"><p>Your diagram will render here, filling the full width edge-to-edge, after you click Generate.</p></div></div></div>
-    <p class="note">Stations that sit on a junction — where the route splits into two lines and rejoins later — are automatically detected and drawn as a labelled branch lane, connected back to the main line with dashed bridge connectors, instead of being silently dropped.</p>
+    <p class="note">Stations that sit on a junction — where the route splits into two lines and rejoins later — are automatically detected and drawn as a labelled branch lane, connected back to the main line with dashed bridge connectors, instead of being silently dropped. Diagrams with more than 27 stations are split across multiple pages (each sized and laid out the same as a single-page diagram), with dashed arrow markers showing where the line continues onto the next page.</p>
     <div class="canva-box">
       <b>Using Canva?</b> Click <b>Download PNG</b> above, then in Canva choose <b>Create a design → Upload → your PNG</b> — it drops in at full resolution as a background you can layer text/branding over. The generated <b>.pptx</b> file can also be imported directly via Canva's <b>File → Import file</b> option if you're editing the deck itself.
     </div>
@@ -166,7 +182,7 @@
 const $ = (id) => document.getElementById(id);
 let leafletMap = null;
 let lastState = null;
-const TOWER_ICON_B64 = "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";
+const TOWER_ICON_B64 = "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";
 const TOWER_ICON_WHITE_B64 = "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";
 
 
@@ -412,6 +428,23 @@ function resolveTopology(nodes, edges, order){
   return {backbone, spurs, extraEdges};
 }
 
+// Above this many stations on the main line, the schematic diagram is split
+// across multiple full-size pages instead of shrinking everything onto one
+// canvas (which is what caused labels/readings to overlap).
+const MAX_STATIONS_PER_PAGE = 27;
+
+function splitBackboneIntoPages(backbone, maxPerPage){
+  const total = backbone.length;
+  if (total <= maxPerPage) return [backbone];
+  const pageCount = Math.ceil(total / maxPerPage);
+  const perPage = Math.ceil(total / pageCount);
+  const pages = [];
+  for (let i = 0; i < total; i += perPage){
+    pages.push(backbone.slice(i, i + perPage));
+  }
+  return pages;
+}
+
 function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function chooseGrid(n, targetAspect, cellW, cellH){
@@ -499,7 +532,8 @@ function nodeCircleSvg(cx, cy, R, key, nodes){
   out += `<text x="${cx}" y="${nameY+18}" font-family="Courier New,monospace" font-size="13" font-weight="600" text-anchor="middle" fill="#0055cc" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke fill">${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}</text>`;  return out;
 }
 
-function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
+function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
+  pageCtx = pageCtx || {};
   const {backbone, spurs, extraEdges} = topo;
   const edgeLookup = {};
   for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
@@ -540,7 +574,8 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
 
   let elems = [`<rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#ffffff"/>`];
   elems.push(`<rect x="0" y="0" width="${CANVAS_W}" height="${TITLE_BAR_H}" fill="#151c2c"/>`);
-  elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}</text>`);
+  const pageSuffix = (pageCtx.totalPages && pageCtx.totalPages>1) ? `  \u2014  PAGE ${pageCtx.pageNum} OF ${pageCtx.totalPages}` : '';
+  elems.push(`<text x="${PAD_X+10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xmlEsc(title)}${xmlEsc(pageSuffix)}</text>`);
   elems.push(`<text x="${PAD_X+10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" fill="#aab4c8" font-style="italic">${hasPerf ? 'FWD reading above each link \u00b7 REV reading below \u00b7 GPS = actual straight-line distance from coordinates' : 'Tower placement only \u2014 no Performance CSV supplied, so no RSSI or link-distance readings are shown'}</text>`);
 
   let gpsTotal = 0;
@@ -549,7 +584,11 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
     if ((a+'|'+b) in edgeLookup) gpsTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
   }
   const nAll = Object.keys(nodes).length;
-  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${nAll} stations${nSpurs? ' ('+nSpurs+' branch)':''}</text>`);
+  const pageStationCount = backbone.length + spurs.reduce((s,sp)=>s+sp.chain.length,0);
+  const headerCountLabel = (pageCtx.totalPages && pageCtx.totalPages>1)
+    ? `${pageStationCount} on this page (${nAll} total)`
+    : `${nAll} stations`;
+  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${xmlEsc(headerCountLabel)}${nSpurs? ' \u00b7 '+nSpurs+' branch':''}</text>`);
   elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Main line: ${gpsTotal.toFixed(2)} KM</text>`);
 
   // horizontal links (backbone)
@@ -718,6 +757,38 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf){
     const key=backbone[i];
     const [cx,cy] = positions[key];
     elems.push(nodeCircleSvg(cx, cy, R, key, nodes));
+  }
+
+  // Cross-page continuation markers: dashed arrows + the FWD/REV/GPS
+  // reading for the link that carries on to the previous/next page, so the
+  // route isn't silently cut off at a page boundary.
+  if (pageCtx.prevLinkNode && (pageCtx.prevLinkNode in positions)===false && backbone.length){
+    const [x0,y0] = positions[backbone[0]];
+    const prevName = nodes[pageCtx.prevLinkNode] ? nodes[pageCtx.prevLinkNode].name : 'previous station';
+    const key = pageCtx.prevLinkNode+'|'+backbone[0];
+    const lines = [[`\u2190 FROM PAGE ${pageCtx.pageNum-1}: ${prevName}`, '#8a5200']];
+    if (hasPerf && (key in edgeLookup)){
+      const [df,rf,dr,rr] = edgeLookup[key];
+      lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
+      lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
+    }
+    const ax = Math.max(PAD_X+45, x0-90);
+    elems.push(`<line x1="${ax}" y1="${y0}" x2="${x0-R-6}" y2="${y0}" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="8,5"/>`);
+    elems.push(readingSvg(Math.max(PAD_X+95, x0-150), y0-46, lines, 11.5));
+  }
+  if (pageCtx.nextLinkNode && (pageCtx.nextLinkNode in positions)===false && backbone.length){
+    const [xN,yN] = positions[backbone[backbone.length-1]];
+    const nextName = nodes[pageCtx.nextLinkNode] ? nodes[pageCtx.nextLinkNode].name : 'next station';
+    const key = backbone[backbone.length-1]+'|'+pageCtx.nextLinkNode;
+    const lines = [[`CONTINUES ON PAGE ${pageCtx.pageNum+1}: ${nextName} \u2192`, '#8a5200']];
+    if (hasPerf && (key in edgeLookup)){
+      const [df,rf,dr,rr] = edgeLookup[key];
+      lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
+      lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
+    }
+    const bx = Math.min(CANVAS_W-PAD_X-45, xN+90);
+    elems.push(`<line x1="${xN+R+6}" y1="${yN}" x2="${bx}" y2="${yN}" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="8,5"/>`);
+    elems.push(readingSvg(Math.min(CANVAS_W-PAD_X-95, xN+150), yN-46, lines, 11.5));
   }
 
   // legend bar
@@ -1043,8 +1114,44 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     const topo = resolveTopology(nodes, edges, order);
     const title = $('titleInput').value.trim() || 'TOWER PLACEMENT LOCATION DIAGRAM';
 
-    const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, topo, title, hasPerf);
-    $('diagramHost').innerHTML = svg;
+    // Split the main line across multiple pages once it exceeds
+    // MAX_STATIONS_PER_PAGE, instead of squeezing everything onto one
+    // shrinking canvas. Each spur/branch is drawn on whichever page
+    // contains the station it forks from; if a branch rejoins on a
+    // different page, or the main line itself crosses a page boundary,
+    // a dashed arrow marker with the FWD/REV/GPS reading shows where it
+    // continues.
+    const backbonePages = splitBackboneIntoPages(topo.backbone, MAX_STATIONS_PER_PAGE);
+    const totalPages = backbonePages.length;
+    const pageSvgs = [];
+    let gpsGrandTotal = 0;
+
+    backbonePages.forEach((pageBackbone, i)=>{
+      const pageSet = new Set(pageBackbone);
+      const pageSpurs = topo.spurs.filter(s => pageSet.has(s.fork));
+      const pageExtraEdges = topo.extraEdges.filter(([a,b]) => pageSet.has(a) && pageSet.has(b));
+      const pageTopo = {backbone: pageBackbone, spurs: pageSpurs, extraEdges: pageExtraEdges};
+      const pageCtx = {
+        pageNum: i+1,
+        totalPages,
+        prevLinkNode: i>0 ? backbonePages[i-1][backbonePages[i-1].length-1] : null,
+        nextLinkNode: i<totalPages-1 ? backbonePages[i+1][0] : null,
+      };
+      const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, pageTopo, title, hasPerf, pageCtx);
+      pageSvgs.push(svg);
+      gpsGrandTotal += gpsTotal;
+    });
+    // Add the distance of the links that actually cross a page boundary,
+    // so the grand total still reflects the whole main line.
+    for (let i=0;i<backbonePages.length-1;i++){
+      const a = backbonePages[i][backbonePages[i].length-1];
+      const b = backbonePages[i+1][0];
+      gpsGrandTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    }
+
+    $('diagramHost').innerHTML = pageSvgs.map((svg,i)=>
+      `<div class="diagram-page">${totalPages>1?`<div class="page-tag">Page ${i+1} of ${totalPages}</div>`:''}${svg}</div>`
+    ).join('');
     $('downloadSvgBtn').disabled = false;
     $('downloadPngBtn').disabled = false;
     $('printBtn').disabled = false;
@@ -1052,9 +1159,9 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     renderMap(nodes, edges, topo);
 
     const nSpurs = topo.spurs.length;
-    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsTotal.toFixed(2)} KM.` + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
+    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsGrandTotal.toFixed(2)} KM.` + (totalPages>1 ? ` Split across ${totalPages} pages (max ${MAX_STATIONS_PER_PAGE} stations/page).` : '') + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
     status.classList.add('ok');
-    lastState = {svg};
+    lastState = {svgs: pageSvgs};
   } catch(e){
     status.textContent = 'Error: ' + e.message;
     status.classList.add('err');
@@ -1064,12 +1171,20 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
 
 $('downloadSvgBtn').addEventListener('click', ()=>{
   if (!lastState) return;
-  downloadSvgBlob(lastState.svg, 'tower_placement_diagram.svg');
+  const n = lastState.svgs.length;
+  lastState.svgs.forEach((svg,i)=>{
+    const suffix = n>1 ? `_page${i+1}of${n}` : '';
+    setTimeout(()=>downloadSvgBlob(svg, `tower_placement_diagram${suffix}.svg`), i*250);
+  });
 });
 
 $('downloadPngBtn').addEventListener('click', ()=>{
   if (!lastState) return;
-  downloadSvgAsPng(lastState.svg, 'tower_placement_diagram.png');
+  const n = lastState.svgs.length;
+  lastState.svgs.forEach((svg,i)=>{
+    const suffix = n>1 ? `_page${i+1}of${n}` : '';
+    setTimeout(()=>downloadSvgAsPng(svg, `tower_placement_diagram${suffix}.png`), i*400);
+  });
 });
 
 
