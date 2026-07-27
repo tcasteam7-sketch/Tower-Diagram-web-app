@@ -68,6 +68,11 @@
 
 
 
+  @page {
+    size: landscape;
+    margin: 6mm;
+  }
+
   @media print {
     /* Hide the branding header and the "Input files & options" panel —
        the PDF should only contain the diagram and the map. */
@@ -84,16 +89,35 @@
     }
     .page-tag { display: none !important; }
 
-    /* Each generated diagram page prints on its own sheet */
+    /* Strip margins/padding/borders/shadows that eat into the printable
+       area — a few stray millimetres here is exactly what tips a nearly-
+       full page into spilling onto an extra, mostly blank sheet. */
+    body { margin: 0 !important; background: #fff !important; }
+    .wrap { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+    .panel {
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+
+    /* Each generated diagram page prints on its own sheet.
+       NOTE: page-break-inside:avoid was deliberately removed here — with the
+       "one continuous sheet" diagram, the SVG can be much taller than a
+       single printed page. Forcing "avoid" on something too tall to fit
+       makes the browser push the whole block onto a fresh page (leaving the
+       first page blank) and then it still has to split the oversized block
+       across pages anyway, ignoring the "avoid" hint. Letting it flow
+       naturally means it starts on page 1 as expected. */
     .diagram-page {
       page-break-after: always !important;
       break-after: page !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      margin: 0 !important;
     }
     .diagram-page:last-child {
-      page-break-after: auto !important;
-      break-after: auto !important;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
     }
 
     /* Target the map container */
@@ -104,7 +128,41 @@
     
       /* Prevents the element from being split across pages if it fits on one */
       page-break-inside: avoid !important;  
-      break-inside: avoid !important;       
+      break-inside: avoid !important;
+
+      /* Nothing follows the map, so never force a further break after it —
+         that stray forced break is what was producing the extra blank
+         trailing sheet. */
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+    }
+    /* Shrink the map slightly for print so it comfortably fits within one
+       landscape page at the @page margin above, instead of running just
+       long enough to overflow onto a near-empty extra page. */
+    #map { height: 460px !important; }
+
+    /* THE actual cause of the blank first page: #diagramStage has
+       overflow:hidden (for the rounded corners on screen). Chromium's print
+       engine cannot split an overflow:hidden container across page
+       boundaries — it treats it as a single atomic block, and if that block
+       is taller than one page it gets shoved onto the next page (leaving
+       page 1 blank) while still failing to fit, clipping/garbling content at
+       the forced page breaks. Turning overflow back to visible for print
+       lets the tall diagram flow and paginate normally, starting on page 1. */
+    #diagramStage {
+      overflow: visible !important;
+      border: none !important;
+      border-radius: 0 !important;
+    }
+
+    /* Leaflet's own container CSS sets overflow:hidden, which can clip the
+       permanent Start/End tooltips if a station sits near the map edge.
+       Let them spill over slightly rather than disappear in the PDF. */
+    #map, .leaflet-container, .leaflet-tooltip-pane {
+      overflow: visible !important;
+    }
+    .leaflet-tooltip.station-endpoint-label {
+      font-size: 12px !important;
     }
   }
 
@@ -142,11 +200,11 @@
       </div>
       <button id="genBtn">Generate diagram</button>
     </div>
-    <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. Diagrams with more than 27 stations are automatically split across multiple full-size pages to avoid crowding. Then click Generate.</div>
+    <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. All stations are drawn on one continuous sheet — the diagram grows taller as station count increases, instead of splitting into multiple pages. Then click Generate.</div>
     <div class="legend">
-      <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>Main Station</span>
-      <span><span class="swatch" style="background:#8b5cf6;border:2px solid #4c1d95"></span>IBH (Block Hut)</span>
-      <span><span class="swatch" style="background:#3b82f6;border:2px solid #173f9e"></span>LC Gate</span>
+      <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>STCAS</span>
+      <span><span class="swatch" style="background:#8b5cf6;border:2px solid #4c1d95"></span>LC-TCAS(IB)</span>
+      <span><span class="swatch" style="background:#3b82f6;border:2px solid #173f9e"></span>LC-TCAS(LC-Gate)</span>
       <span><span class="lineswatch" style="background:#1e8e3e"></span>Good (RSSI mag. &lt; 70 dBm)</span>
       <span><span class="lineswatch" style="background:#e8850c"></span>Fair (70&ndash;75 dBm)</span>
       <span><span class="lineswatch" style="background:#c62828"></span>Poor (&gt; 75 dBm)</span>
@@ -163,7 +221,7 @@
       <button class="secondary" id="printBtn" disabled>Print / Save as PDF (landscape, full page)</button>
     </div>
     <div id="diagramStage"><div id="diagramHost"><div class="placeholder"><p>Your diagram will render here, filling the full width edge-to-edge, after you click Generate.</p></div></div></div>
-    <p class="note">Stations that sit on a junction — where the route splits into two lines and rejoins later — are automatically detected and drawn as a labelled branch lane, connected back to the main line with dashed bridge connectors, instead of being silently dropped. Diagrams with more than 27 stations are split across multiple pages (each sized and laid out the same as a single-page diagram), with dashed arrow markers showing where the line continues onto the next page.</p>
+    <p class="note">Stations that sit on a junction — where the route splits into two lines and rejoins later — are automatically detected and drawn as a labelled branch lane, connected back to the main line with dashed bridge connectors, instead of being silently dropped. All stations are drawn on one continuous sheet — as station count grows, the diagram gets taller (more rows) rather than being split into separate pages.</p>
     <div class="canva-box">
       <b>Using Canva?</b> Click <b>Download PNG</b> above, then in Canva choose <b>Create a design → Upload → your PNG</b> — it drops in at full resolution as a background you can layer text/branding over. The generated <b>.pptx</b> file can also be imported directly via Canva's <b>File → Import file</b> option if you're editing the deck itself.
     </div>
@@ -171,6 +229,7 @@
   </div>
   <div class="panel" id="map-panel">
     <div class="panel-head"><h2><span class="step">2</span>Interactive map </h2></div>
+    <div id="mapEndpointsReadout" style="font-size:13.5px;font-weight:800;color:#151c2c;margin-bottom:8px;"></div>
     <div id="map">
     </div>
     <p class="note">Live OpenStreetMap tiles (needs internet). Markers and link colours reuse the same station classification and RSSI thresholds as the diagrams above.</p>
@@ -182,6 +241,17 @@
 const $ = (id) => document.getElementById(id);
 let leafletMap = null;
 let lastState = null;
+let mapBounds = [];
+
+// Print CSS shrinks #map's height (460px vs the on-screen 560px) so the
+// page fits cleanly. Leaflet doesn't know about that resize on its own —
+// without telling it, tiles/markers/tooltips can end up mis-positioned or
+// cropped in the printed PDF. invalidateSize() + a re-fit fixes that.
+window.addEventListener('beforeprint', () => {
+  if (!leafletMap) return;
+  leafletMap.invalidateSize();
+  if (mapBounds.length) leafletMap.fitBounds(mapBounds, {padding:[40,40]});
+});
 const TOWER_ICON_B64 = "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";
 const TOWER_ICON_WHITE_B64 = "iVBORw0KGgoAAAANSUhEUgAAAKwAAACUCAYAAAAOGMIYAAAHeUlEQVR4nO2d0bbbKAxFyaz+/y97Hnq9mqYBSyCBjnT2U6e1jWy2ZRlwpjVCCCGEEEIIIYQQQgghhBBCCCGEEEIIIf68TgdgyXVd1/3n1+uV6tx6VDvn/04HYMV7x33774xUPOcUwlboKCnZrwW8sNk7aIbM1wRa2FHHVKjnKpzjJ9DC9qjYkZ9kzbKwwmo75PrBKx5vevGPbk7k8+0BKay2FHjfHrETn+KvJC2ksD2eZB39XVSk8Vcpg+CE7clWpcNmQLpBn4ATVkNmuatm2RTCSksBRLT1aXZpoYSVSphtfNYi5iw38K/TAayi6cynTDwjhtXN8Xmcz31fr9er9wKGeBPOApNhLbLr07bafZ+2PzX2m1lgGGFXsezEmUkL7b9r6lOPmzkqqYTVjArMdt7O/TIIZg20sLsffasCWQyzSbNs1rIAQljrTDMjjlUM2raZZf8GQtgVMmaalXNCvwHSCLv64rFzAUnmGThv0gibGfSsaAmssJbZKEtmqyA2rLASEEVEjHknqYUl+aCwBIrUwiLWdIgx7yS1sFKySFKh/oUVdqdk1iJoj1dBRCmwwn4i7dTInZ8l03uSRthVnmSxEv301wORb1gJEMLumjv3lnZm+hddMGsghLVmRYLZfa3WKkjFzlpeQAsrXQNq3Xm7XpqYXf8FWtgVLB7vT8eQbNOLxePT9Qw3AIywq6MAkm+ktB1qmbnf2+awVx+oE7Wo33Z/jGjVnsX3ahnEhsmwGk5+6uKBRVsZZG0NTNiVx/0pPMX2qHOjAyWsFV5fv3qQXUAtcMIyy/6mWu16AyfsCKm0SF+d7hryQgFS2JVhn1PZxmr+XytrpuzaGtiw1jsnOinqwH2FUuAGMsO2Vut/RDGi0rm2Bixsa3g/frErptZyZtfWwIVtLW7HnIwr6jWxAF7Y1s510Ey73o/wzLK2lkTY1tYXsoyYlcxbHs9zjkr6E1xFUruOxn8rvcHvIE2GJTWgsAM8V0lVG46ygsJOwMf5OShsB6+vCbzaqAKFVTKbXZmVbaCwX+B617hQWAWrWZJZdh0KK8RTNmZZORT2A8oTGworwHJVGMuCNSjsG1r5RttbHov8gcJOIhGM0tpDYX/QZEuLXxskc1BYJTMCXj9I9qfgY/gC0OJJwhezPsywAYl2A0WivLCUA4vywvaQPJZfP8zuP9qON9J3Sgu78vmKxTasVfWUFnbEjgx3t0Fx5ZQVdpRdrSYFVrdhWfAvZYXtcUISiimHwi6wIztS5r8pKezMCiurt3nWq2uUFFaDpWD3sbTHZJb9QzlhNZ3v+VNAzLRzlBJ2RdZVpD/93oNZ9jelhJUyEmmHyKRPGWGlGcpDIMmMl6RdZtlCwkpYnf/fuW1VSggryUxaWU7JVT3LlhD2CS/5Zo7LLDumvLARfyDjqaatnGXTC+vRue/faHm1X1nKEemFfWLHp9j83NuO1PWS5USBlUSW7VSsd8tn2JueKJrHv7SdUVtW7WQlrbAWj25PgSzaqih42kfK0/daFp09Opb0ywVpO6NjVSoNUmZYyceFO36c2EKk2SWJWUkprJTZgX3tdOusbNL9KpUG6YTVfrqtWT+wkuVmRJf8XTXSCavBegRAglfWrJJlUwmrya6nhNAcp/cyZxEHKr9OB7CbFfGu67pmhVmdoq0u6k2aDCvJrhbLDE+Nl74foxdjhbIgjbAjpLWqdAhp9bH+2abmi4MKUo5ILax08P6bMBbSSmR9iqN33KpZNkVdtNJJq2LOzmh5LrbJXO+mODEPYVaPf7rtrNLClwTess5sH7XtDMBfjJ3rR1cz7e72M8oOfULSDrTuuB1Z3aL9jMLClwRPeHTa6cd65UUxsHegdsjoRAw74ohwHXYCmWFPZw7NAH6EWE+2bw2ksBI8Omp2pslrhiqbjBLSCtuabYdarQeIsuoLFbj6ZvdAuldnr9SWp0cpTpImw0ZdZTU6tkdMWcTsAXVyvc7SLCGULi6RxHMf69v22jUGFjfcKB5JGwikybA3Kx2vyXqSzpeuvnpqWzt8lkHMHjAnps0aFhlJ2l4vw2rj+bbv7BMja5ZN+4mM5JG8cx2C5uaoPPX6BERJsDIyYNGp1qu1dsSUdYE3dIaVdrzXIusVZsqR9/2qEj7DnsgIVlnwdFsZsyxshq26Yuk+n6qZNnSGXZVtdv+dknuvT8iWZUML20My1npK9t1toIo3S1hhPbNOa7La0XtqdvTvVpMO97FmYohIWGF7rF78TxFOSKuZDLASN0vNG/YkJLNHve2+Iekwy1ml2RvL6gbSXCskmUNmWOlskPWMkGe2lcQriVOacS3q+IiEFHaEdZ36bZ+n9jXHk+5jHed7209DYUhih3sUjB5bmgu7+pjTSDYqCSyy6hMWwqGUBTAZ1jOr9o6zGtMOWe/j7LhBIxDqrlq5aJ4ZwqMzI8aLkGVDBThzoXddZCtpo8cbXVqYkuATq0e/pr0Ix9C0FV2+GSCFPdURK+0ixIwgeLgAZ6YYd6N93KLEHSXOESED/LywUS+kx/jqDjQzc9GACDIyGaY7kfgf13Uk87H+11MAAAAASUVORK5CYII=";
 
@@ -312,12 +382,18 @@ function parsePerformance(rows){
   for (const pk of order){
     const entries = groups[pk];
     const fwd = entries[0];
-    const rev = entries.length>1 ? entries[1] : entries[0];
+    // Only accept a genuine reverse-direction reading: its from/to keys must
+    // be the exact swap of the FWD row's from/to keys. A second row that
+    // happens to share the same station pair but isn't actually the reverse
+    // measurement (e.g. a duplicate FWD reading, or an unrelated row that
+    // normalized to the same pair key) must NOT be silently used as REV.
+    const rev = entries.slice(1).find(e => e[2]===fwd[3] && e[3]===fwd[2]) || null;
+    const hasRev = !!rev;
     hops.push({
       from_key: fwd[2], from_name: cleanName(fwd[0]),
       to_key: fwd[3], to_name: cleanName(fwd[1]),
       dist_fwd: fwd[4], rsl_fwd: fwd[5],
-      dist_rev: rev[4], rsl_rev: rev[5],
+      dist_rev: hasRev ? rev[4] : null, rsl_rev: hasRev ? rev[5] : null,
     });
   }
   return hops;
@@ -541,21 +617,30 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
   for (const [a,b,df,rf,dr,rr] of edges){ edgeLookup[a+'|'+b]=[df,rf,dr,rr]; edgeLookup[b+'|'+a]=[dr,rr,df,rf]; }
   const N = backbone.length;
 
-  const CANVAS_W = 1999, CANVAS_H = 1125;
+  const CANVAS_W = 1999;
   const TITLE_BAR_H = 92, LEGEND_BAR_H = 72, PAD_X = 16, BRANCH_LANE_H = 200;
-  const nSpurs = spurs.length;
-  const branchBandH = BRANCH_LANE_H * nSpurs;
   const diagramW = CANVAS_W - 2*PAD_X;
-  const diagramHTotal = CANVAS_H - TITLE_BAR_H - LEGEND_BAR_H;
-  const backboneH = diagramHTotal - branchBandH;
-  const targetAspect = diagramW/backboneH;
 
-  const [perRow] = chooseGrid(N, targetAspect, 168, 236);
+  // Fixed per-station footprint so node circles, labels, and reading text
+  // stay the same readable size no matter how many stations there are.
+  // Instead of squeezing more rows into a fixed-height canvas (which used to
+  // force pagination once things got cramped), we keep the row height fixed
+  // and simply add rows — growing the canvas taller to fit everyone on one
+  // continuous sheet.
+  const ROW_H = 300;
+  const STATIONS_PER_ROW = 7;
+  const perRow = Math.max(1, Math.min(N, STATIONS_PER_ROW));
   const rows = [];
   for (let i=0;i<N;i+=perRow) rows.push(backbone.slice(i,i+perRow));
   const nRows = rows.length;
-  const colW = diagramW/perRow, rowH = backboneH/nRows;
-  const R = Math.min(colW,rowH)*0.19;
+  const backboneH = nRows * ROW_H;
+
+  const nSpurs = spurs.length;
+  const branchBandH = BRANCH_LANE_H * nSpurs;
+  const CANVAS_H = TITLE_BAR_H + LEGEND_BAR_H + backboneH + branchBandH;
+
+  const colW = diagramW/perRow, rowH = ROW_H;
+  const R = Math.min(colW,rowH)*0.21;
 
   const positions = {};
   function nodePos(idx){
@@ -623,26 +708,54 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
     const [df,rf,dr,rr] = edgeLookup[key];
     const x1 = Math.min(pa.cx,pb.cx), x2 = Math.max(pa.cx,pb.cx);
     const y = pa.cy;
-    if (!hasPerf || df===null){
+    if (!hasPerf || (df===null && dr===null)){
       elems.push(`<line x1="${x1+R}" y1="${y}" x2="${x2-R}" y2="${y}" stroke="${NO_DATA_LINK_COLOR}" stroke-width="4.5" stroke-linecap="round"/>`);
+      // No Performance CSV (or no reading for this specific link) — there's
+      // still no RSSI to show, but the GPS distance is always computable
+      // straight from the two stations' coordinates, so show it.
+      const gpsNoPerf = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+      const mxNoPerf = (x1+x2)/2;
+      elems.push(placeReading(mxNoPerf, y-32, [[`GPS ${gpsNoPerf.toFixed(2)} KM`,'#0066cc']], 13, readingBoxes));
       continue;
     }
     const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
-    const fcolor = rslColor(rf), rcolor = rslColor(rr);
-    elems.push(`<line x1="${x1+R}" y1="${y-6}" x2="${x2-R}" y2="${y-6}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
-    elems.push(`<line x1="${x1+R}" y1="${y+6}" x2="${x2-R}" y2="${y+6}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
-    const mx=(x1+x2)/2;
-    const lines = [
-      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
-      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
-      [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-    ];
-    // Lines sit at y±6 (stroke-width 4.5, so outer edge of the near line is
-    // y-6-2.25 = y-8.25). The 3-line block is 58px tall (half-height 29px).
-    // Center it at y-46 so its bottom edge clears the line with an ~8px gap,
-    // instead of the old y-28 which drove the block's bottom edge well past
-    // the lines.
-    elems.push(placeReading(mx, y-46, lines, 12.5, readingBoxes));
+    const hasFwdData = (df!==null && rf!==null);
+    const hasRevData = (dr!==null && rr!==null);
+    if (hasFwdData && hasRevData){
+      const fcolor = rslColor(rf), rcolor = rslColor(rr);
+      elems.push(`<line x1="${x1+R}" y1="${y-6}" x2="${x2-R}" y2="${y-6}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      elems.push(`<line x1="${x1+R}" y1="${y+6}" x2="${x2-R}" y2="${y+6}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      const mx=(x1+x2)/2;
+      const lines = [
+        [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
+        [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
+        [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+      ];
+      // Lines sit at y±6 (stroke-width 4.5, so outer edge of the near line is
+      // y-6-2.25 = y-8.25). The 3-line block is 58px tall (half-height 29px).
+      // Center it at y-46 so its bottom edge clears the line with an ~8px gap,
+      // instead of the old y-28 which drove the block's bottom edge well past
+      // the lines.
+      elems.push(placeReading(mx, y-46, lines, 12.5, readingBoxes));
+    } else if (hasFwdData){
+      const fcolor = rslColor(rf);
+      elems.push(`<line x1="${x1+R}" y1="${y}" x2="${x2-R}" y2="${y}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      const mx=(x1+x2)/2;
+      const lines = [
+        [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`,fcolor],
+        [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+      ];
+      elems.push(placeReading(mx, y-40, lines, 12.5, readingBoxes));
+    } else {
+      const rcolor = rslColor(rr);
+      elems.push(`<line x1="${x1+R}" y1="${y}" x2="${x2-R}" y2="${y}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      const mx=(x1+x2)/2;
+      const lines = [
+        [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`,rcolor],
+        [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+      ];
+      elems.push(placeReading(mx, y-40, lines, 12.5, readingBoxes));
+    }
   }
 
 // vertical connectors (backbone row-wrap)
@@ -658,29 +771,49 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
     const cx = pa.cx;
     const y1 = pa.cy, y2 = pb.cy;
 
-    if (!hasPerf || df===null){
+    if (!hasPerf || (df===null && dr===null)){
       elems.push(`<line x1="${cx}" y1="${y1}" x2="${cx}" y2="${y2}" stroke="${NO_DATA_LINK_COLOR}" stroke-width="4.5" stroke-linecap="round"/>`);
+      const gpsNoPerf = haversineKm(nodes[a].lat, nodes[a].lon, nodes[b].lat, nodes[b].lon);
+      const isLeftWrapNoPerf = (pa.r % 2 === 1);
+      const textXNoPerf = cx + (isLeftWrapNoPerf ? -40 : 40);
+      const myNoPerf = (y1 + y2) / 2 + 15;
+      elems.push(`<g transform="rotate(-90,${textXNoPerf},${myNoPerf})">` + readingSvg(textXNoPerf, myNoPerf, [[`GPS ${gpsNoPerf.toFixed(2)} KM`,'#0066cc']], 13) + '</g>');
       continue;
     }
 
     const gps = haversineKm(nodes[a].lat, nodes[a].lon, nodes[b].lat, nodes[b].lon);
-    const fcolor = rslColor(rf), rcolor = rslColor(rr);
-    const xEdgeF = cx - 7; // Left line
-    const xEdgeR = cx + 7; // Right line
-
-    elems.push(`<line x1="${xEdgeF}" y1="${y1}" x2="${xEdgeF}" y2="${y2}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
-    elems.push(`<line x1="${xEdgeR}" y1="${y1}" x2="${xEdgeR}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
-
-    // 2. Position text on the LEFT side of the vertical lines
+    const hasFwdData = (df!==null && rf!==null);
+    const hasRevData = (dr!==null && rr!==null);
     const isLeftWrap = (pa.r % 2 === 1);
     const textX = cx + (isLeftWrap ? -40 : 40); // -40 puts text on the LEFT side of left turns
     const my = (y1 + y2) / 2 + 15; // Vertical midpoint
 
-    elems.push(`<g transform="rotate(-90,${textX},${my})">` + readingSvg(textX, my, [
-      [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, fcolor],
-      [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rcolor],
-      [`GPS ${gps.toFixed(2)} KM`, '#0066cc'],
-    ], 12.5) + '</g>');
+    if (hasFwdData && hasRevData){
+      const fcolor = rslColor(rf), rcolor = rslColor(rr);
+      const xEdgeF = cx - 7; // Left line
+      const xEdgeR = cx + 7; // Right line
+      elems.push(`<line x1="${xEdgeF}" y1="${y1}" x2="${xEdgeF}" y2="${y2}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      elems.push(`<line x1="${xEdgeR}" y1="${y1}" x2="${xEdgeR}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      elems.push(`<g transform="rotate(-90,${textX},${my})">` + readingSvg(textX, my, [
+        [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, fcolor],
+        [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rcolor],
+        [`GPS ${gps.toFixed(2)} KM`, '#0066cc'],
+      ], 12.5) + '</g>');
+    } else if (hasFwdData){
+      const fcolor = rslColor(rf);
+      elems.push(`<line x1="${cx}" y1="${y1}" x2="${cx}" y2="${y2}" stroke="${fcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      elems.push(`<g transform="rotate(-90,${textX},${my})">` + readingSvg(textX, my, [
+        [`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, fcolor],
+        [`GPS ${gps.toFixed(2)} KM`, '#0066cc'],
+      ], 12.5) + '</g>');
+    } else {
+      const rcolor = rslColor(rr);
+      elems.push(`<line x1="${cx}" y1="${y1}" x2="${cx}" y2="${y2}" stroke="${rcolor}" stroke-width="4.5" stroke-linecap="round"/>`);
+      elems.push(`<g transform="rotate(-90,${textX},${my})">` + readingSvg(textX, my, [
+        [`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rcolor],
+        [`GPS ${gps.toFixed(2)} KM`, '#0066cc'],
+      ], 12.5) + '</g>');
+    }
   }
 
   // branch lanes
@@ -710,21 +843,45 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
       const key=a+'|'+b;
       if (!(key in edgeLookup)) continue;
       const [df,rf,dr,rr] = edgeLookup[key];
-      const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
-      const fcolor = rslColor(rf), rcolor = rslColor(rr);
       const x1=lanePositions[j][0], y=laneCy, x2=lanePositions[j+1][0];
-      elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
-      elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
       const mx=(x1+x2)/2;
-      // Same fix as the main backbone links: lines sit at y±5 (stroke-width
-      // 3.5, outer edge of the near line is y-5-1.75=y-6.75); the 3-line
-      // block is 58px tall (half-height 29). Lift to y-44 so the block
-      // actually clears the lines instead of overlapping them.
-      elems.push(placeReading(mx, y-44, [
-        [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
-        [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
-        [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-      ], 12.5, readingBoxes));
+      if (df===null && dr===null){
+        const gpsNoPerf = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+        elems.push(`<line x1="${x1+laneR}" y1="${y}" x2="${x2-laneR}" y2="${y}" stroke="${NO_DATA_LINK_COLOR}" stroke-width="3.5" stroke-linecap="round"/>`);
+        elems.push(placeReading(mx, y-30, [[`GPS ${gpsNoPerf.toFixed(2)} KM`,'#0066cc']], 12.5, readingBoxes));
+        continue;
+      }
+      const gps = haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+      const hasFwdData = (df!==null && rf!==null);
+      const hasRevData = (dr!==null && rr!==null);
+      if (hasFwdData && hasRevData){
+        const fcolor = rslColor(rf), rcolor = rslColor(rr);
+        elems.push(`<line x1="${x1+laneR}" y1="${y-5}" x2="${x2-laneR}" y2="${y-5}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+        elems.push(`<line x1="${x1+laneR}" y1="${y+5}" x2="${x2-laneR}" y2="${y+5}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+        // Same fix as the main backbone links: lines sit at y±5 (stroke-width
+        // 3.5, outer edge of the near line is y-5-1.75=y-6.75); the 3-line
+        // block is 58px tall (half-height 29). Lift to y-44 so the block
+        // actually clears the lines instead of overlapping them.
+        elems.push(placeReading(mx, y-44, [
+          [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
+          [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
+          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+        ], 12.5, readingBoxes));
+      } else if (hasFwdData){
+        const fcolor = rslColor(rf);
+        elems.push(`<line x1="${x1+laneR}" y1="${y}" x2="${x2-laneR}" y2="${y}" stroke="${fcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+        elems.push(placeReading(mx, y-38, [
+          [`FWD ${rf.toFixed(1)} / ${df.toFixed(2)}KM`,fcolor],
+          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+        ], 12.5, readingBoxes));
+      } else {
+        const rcolor = rslColor(rr);
+        elems.push(`<line x1="${x1+laneR}" y1="${y}" x2="${x2-laneR}" y2="${y}" stroke="${rcolor}" stroke-width="3.5" stroke-linecap="round"/>`);
+        elems.push(placeReading(mx, y-38, [
+          [`REV ${rr.toFixed(1)} / ${dr.toFixed(2)}KM`,rcolor],
+          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+        ], 12.5, readingBoxes));
+      }
     }
 
     if (fork!==null && fork in positions){
@@ -736,11 +893,29 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
       if (fkey in edgeLookup){
         const [df,rf,dr,rr] = edgeLookup[fkey];
         const gps = haversineKm(nodes[fork].lat,nodes[fork].lon,nodes[chain[0]].lat,nodes[chain[0]].lon);
-        elems.push(placeReading(mx_, my_, [
-          [`SPLIT FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
-          [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
-          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-        ], 12.5, readingBoxes));
+        const hasFwdData = (df!==null && rf!==null);
+        const hasRevData = (dr!==null && rr!==null);
+        let lines;
+        if (hasFwdData && hasRevData){
+          lines = [
+            [`SPLIT FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+            [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else if (hasFwdData){
+          lines = [
+            [`SPLIT FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else if (hasRevData){
+          lines = [
+            [`SPLIT REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else {
+          lines = [[`GPS ${gps.toFixed(2)} KM`,'#0066cc']];
+        }
+        elems.push(placeReading(mx_, my_, lines, 12.5, readingBoxes));
       }
     }
     if (rejoin!==null && rejoin in positions){
@@ -752,11 +927,29 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
       if (rkey in edgeLookup){
         const [df,rf,dr,rr] = edgeLookup[rkey];
         const gps = haversineKm(nodes[chain[chain.length-1]].lat,nodes[chain[chain.length-1]].lon,nodes[rejoin].lat,nodes[rejoin].lon);
-        elems.push(placeReading(mx_, my_, [
-          [`REJOIN FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
-          [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
-          [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
-        ], 12.5, readingBoxes));
+        const hasFwdData = (df!==null && rf!==null);
+        const hasRevData = (dr!==null && rr!==null);
+        let lines;
+        if (hasFwdData && hasRevData){
+          lines = [
+            [`REJOIN FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+            [`REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else if (hasFwdData){
+          lines = [
+            [`REJOIN FWD ${rf.toFixed(1)}/${df.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else if (hasRevData){
+          lines = [
+            [`REJOIN REV ${rr.toFixed(1)}/${dr.toFixed(2)}KM`,'#8a5200'],
+            [`GPS ${gps.toFixed(2)} KM`,'#0066cc'],
+          ];
+        } else {
+          lines = [[`GPS ${gps.toFixed(2)} KM`,'#0066cc']];
+        }
+        elems.push(placeReading(mx_, my_, lines, 12.5, readingBoxes));
       }
     }
 
@@ -791,8 +984,8 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
     const lines = [[`\u2190 FROM PAGE ${pageCtx.pageNum-1}: ${prevName}`, '#8a5200']];
     if (hasPerf && (key in edgeLookup)){
       const [df,rf,dr,rr] = edgeLookup[key];
-      lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
-      lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
+      if (df!==null && rf!==null) lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
+      if (dr!==null && rr!==null) lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
     }
     const ax = Math.max(PAD_X+45, x0-90);
     elems.push(`<line x1="${ax}" y1="${y0}" x2="${x0-R-6}" y2="${y0}" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="8,5"/>`);
@@ -805,8 +998,8 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
     const lines = [[`CONTINUES ON PAGE ${pageCtx.pageNum+1}: ${nextName} \u2192`, '#8a5200']];
     if (hasPerf && (key in edgeLookup)){
       const [df,rf,dr,rr] = edgeLookup[key];
-      lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
-      lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
+      if (df!==null && rf!==null) lines.push([`FWD ${rf.toFixed(1)} dBm / ${df.toFixed(2)} KM`, rslColor(rf)]);
+      if (dr!==null && rr!==null) lines.push([`REV ${rr.toFixed(1)} dBm / ${dr.toFixed(2)} KM`, rslColor(rr)]);
     }
     const bx = Math.min(CANVAS_W-PAD_X-45, xN+90);
     elems.push(`<line x1="${xN+R+6}" y1="${yN}" x2="${bx}" y2="${yN}" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="8,5"/>`);
@@ -821,7 +1014,7 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
   let lx = PAD_X+10;
   elems.push(`<text x="${lx}" y="${ly+18}" font-family="Arial" font-size="10.5" font-weight="800" fill="#6b7280" letter-spacing="0.5">STATION TYPE</text>`);
   const swY = ly + LEGEND_BAR_H - 20;
-  for (const [label,kindKey] of [['Main Station','normal'],['IBH (Block Hut)','ibh'],['LC Gate','lc']]){
+  for (const [label,kindKey] of [['STCAS','normal'],['LC-TCAS(IB)','ibh'],['LC-TCAS(LC-Gate)','lc']]){
     const [fillc,strokec] = COLORS[kindKey];
     if (kindKey==='lc'){
       elems.push(`<rect x="${lx}" y="${swY-11}" width="22" height="22" rx="4" fill="${fillc}" stroke="${strokec}" stroke-width="3"/>`);
@@ -1014,7 +1207,7 @@ function buildGeoSvg(nodes, edges, title){
   elems.push(`<rect x="0" y="${ly}" width="${CANVAS_W}" height="${LEGEND_BAR_H}" fill="#f1f3f7"/>`);
   elems.push(`<line x1="0" y1="${ly}" x2="${CANVAS_W}" y2="${ly}" stroke="#d7dbe3" stroke-width="1"/>`);
   let lx = 24;
-  for (const [label,kindKey] of [['Main Station','normal'],['IBH (Block Hut)','ibh'],['LC Gate (square)','lc']]){
+  for (const [label,kindKey] of [['STCAS','normal'],['LC-TCAS(IB)','ibh'],['LC-TCAS(LC-GATE) (square)','lc']]){
     const [fillc,strokec] = COLORS[kindKey];
     if (kindKey==='lc'){
       elems.push(`<rect x="${lx-2}" y="${ly+LEGEND_BAR_H/2-10}" width="20" height="20" rx="4" fill="${fillc}" stroke="${strokec}" stroke-width="2"/>`);
@@ -1071,9 +1264,9 @@ function renderMap(nodes, edges, topo){
       
     // Add permanent visible labels for Start and End stations
     if (key === startKey) {
-      marker.bindTooltip(`<b>START:</b> ${n.name}`, {permanent: true, direction: 'right', offset: [10, 0]});
+      marker.bindTooltip(`<b>START:</b> ${n.name}`, {permanent: true, direction: 'right', offset: [10, 0], className: 'station-endpoint-label'});
     } else if (key === endKey && key !== startKey) {
-      marker.bindTooltip(`<b>END:</b> ${n.name}`, {permanent: true, direction: 'left', offset: [-10, 0]});
+      marker.bindTooltip(`<b>END:</b> ${n.name}`, {permanent: true, direction: 'left', offset: [-10, 0], className: 'station-endpoint-label'});
     }
     
     marker.addTo(leafletMap);
@@ -1081,6 +1274,21 @@ function renderMap(nodes, edges, topo){
   }
   
   if(bounds.length) leafletMap.fitBounds(bounds, {padding:[40,40]});
+
+  // Keep a reference so the print handler below can re-fit the view once
+  // the map container is resized for the printed page.
+  mapBounds = bounds;
+
+  // Also surface the Start/End names as plain HTML text (not just a Leaflet
+  // tooltip layer). Tooltips live inside the map's tile/canvas rendering and
+  // can be clipped or fail to rasterize consistently across browsers'
+  // "print to PDF" engines — this line is guaranteed to show up either way.
+  const startName = nodes[startKey] ? nodes[startKey].name : '?';
+  const endName = nodes[endKey] ? nodes[endKey].name : '?';
+  const readout = $('mapEndpointsReadout');
+  if (readout){
+    readout.textContent = `Start Station: ${startName}   \u2192   End Station: ${endName}`;
+  }
 }
 
 function downloadSvgBlob(svgText, filename){
@@ -1091,23 +1299,62 @@ function downloadSvgBlob(svgText, filename){
   URL.revokeObjectURL(url);
 }
 
-function downloadSvgAsPng(svgText, filename){
-  const img = new Image();
-  const svgBlob = new Blob([svgText], {type:'image/svg+xml;charset=utf-8'});
-  const url = URL.createObjectURL(svgBlob);
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1999 * 2; canvas.height = 1125 * 2; // 2x for crisp Canva import
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(url);
-    canvas.toBlob((blob)=>{
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-    }, 'image/png');
-  };
-  img.src = url;
+// Stack every page's SVG into ONE master SVG document (pages placed one
+// below the other, in order) instead of producing separate per-page files.
+// This matters because triggering several a.click() downloads in a row gets
+// silently blocked by the browser's "multiple automatic downloads"
+// protection after the first one — which is exactly why diagrams with more
+// than MAX_STATIONS_PER_PAGE stations used to only save the first page's
+// worth of data. A single merged file always saves completely, in one click.
+function mergeSvgPages(svgs){
+  if (svgs.length === 1) return svgs[0];
+  const first = svgs[0];
+  const wm = first.match(/width="(\d+(?:\.\d+)?)"/);
+  const hm = first.match(/height="(\d+(?:\.\d+)?)"/);
+  const width = wm ? parseFloat(wm[1]) : 1999;
+  const height = hm ? parseFloat(hm[1]) : 1125;
+  const GAP = 24; // small visual gap between stacked pages
+  const totalHeight = height*svgs.length + GAP*(svgs.length-1);
+  const groups = svgs.map((svg,i)=>{
+    const inner = svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+    const y = i*(height+GAP);
+    return `<g transform="translate(0,${y})">${inner}</g>` + (i<svgs.length-1 ? `<rect x="0" y="${y+height+GAP/2-1}" width="${width}" height="2" fill="#ccc"/>` : '');
+  }).join('\n');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">\n${groups}\n</svg>`;
+}
+
+function downloadMergedPng(svgs, filename){
+  const first = svgs[0];
+  const wm = first.match(/width="(\d+(?:\.\d+)?)"/);
+  const hm = first.match(/height="(\d+(?:\.\d+)?)"/);
+  const width = wm ? parseFloat(wm[1]) : 1999;
+  const height = hm ? parseFloat(hm[1]) : 1125;
+  const scale = 2; // 2x for crisp Canva import
+  const GAP = 24;
+  const totalHeight = height*svgs.length + GAP*(svgs.length-1);
+  const canvas = document.createElement('canvas');
+  canvas.width = width*scale; canvas.height = totalHeight*scale;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  let remaining = svgs.length;
+  svgs.forEach((svg,i)=>{
+    const img = new Image();
+    const svgBlob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+    img.onload = () => {
+      const y = i*(height+GAP)*scale;
+      ctx.drawImage(img, 0, y, width*scale, height*scale);
+      URL.revokeObjectURL(url);
+      remaining--;
+      if (remaining === 0){
+        canvas.toBlob((blob)=>{
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+        }, 'image/png');
+      }
+    };
+    img.src = url;
+  });
 }
 
 document.getElementById('genBtn').addEventListener('click', async ()=>{
@@ -1136,44 +1383,14 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     const topo = resolveTopology(nodes, edges, order);
     const title = $('titleInput').value.trim() || 'TOWER PLACEMENT LOCATION DIAGRAM';
 
-    // Split the main line across multiple pages once it exceeds
-    // MAX_STATIONS_PER_PAGE, instead of squeezing everything onto one
-    // shrinking canvas. Each spur/branch is drawn on whichever page
-    // contains the station it forks from; if a branch rejoins on a
-    // different page, or the main line itself crosses a page boundary,
-    // a dashed arrow marker with the FWD/REV/GPS reading shows where it
-    // continues.
-    const backbonePages = splitBackboneIntoPages(topo.backbone, MAX_STATIONS_PER_PAGE);
-    const totalPages = backbonePages.length;
-    const pageSvgs = [];
-    let gpsGrandTotal = 0;
+    // Build the ENTIRE main line as a single continuous diagram — no more
+    // splitting into separate pages once station count grows. buildSnakeSvg
+    // now grows the canvas height (adds rows) to fit everyone at a constant,
+    // readable row size, so it's always one tall sheet instead of several.
+    const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, topo, title, hasPerf, {});
+    const gpsGrandTotal = gpsTotal;
 
-    backbonePages.forEach((pageBackbone, i)=>{
-      const pageSet = new Set(pageBackbone);
-      const pageSpurs = topo.spurs.filter(s => pageSet.has(s.fork));
-      const pageExtraEdges = topo.extraEdges.filter(([a,b]) => pageSet.has(a) && pageSet.has(b));
-      const pageTopo = {backbone: pageBackbone, spurs: pageSpurs, extraEdges: pageExtraEdges};
-      const pageCtx = {
-        pageNum: i+1,
-        totalPages,
-        prevLinkNode: i>0 ? backbonePages[i-1][backbonePages[i-1].length-1] : null,
-        nextLinkNode: i<totalPages-1 ? backbonePages[i+1][0] : null,
-      };
-      const {svg, gpsTotal} = buildSnakeSvg(nodes, edges, pageTopo, title, hasPerf, pageCtx);
-      pageSvgs.push(svg);
-      gpsGrandTotal += gpsTotal;
-    });
-    // Add the distance of the links that actually cross a page boundary,
-    // so the grand total still reflects the whole main line.
-    for (let i=0;i<backbonePages.length-1;i++){
-      const a = backbonePages[i][backbonePages[i].length-1];
-      const b = backbonePages[i+1][0];
-      gpsGrandTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
-    }
-
-    $('diagramHost').innerHTML = pageSvgs.map((svg,i)=>
-      `<div class="diagram-page">${totalPages>1?`<div class="page-tag">Page ${i+1} of ${totalPages}</div>`:''}${svg}</div>`
-    ).join('');
+    $('diagramHost').innerHTML = `<div class="diagram-page">${svg}</div>`;
     $('downloadSvgBtn').disabled = false;
     $('downloadPngBtn').disabled = false;
     $('printBtn').disabled = false;
@@ -1181,9 +1398,9 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     renderMap(nodes, edges, topo);
 
     const nSpurs = topo.spurs.length;
-    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, total line ${gpsGrandTotal.toFixed(2)} KM.` + (totalPages>1 ? ` Split across ${totalPages} pages (max ${MAX_STATIONS_PER_PAGE} stations/page).` : '') + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
+    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, total line ${gpsGrandTotal.toFixed(2)} KM. All stations on one sheet.` + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
     status.classList.add('ok');
-    lastState = {svgs: pageSvgs};
+    lastState = {svgs: [svg]};
   } catch(e){
     status.textContent = 'Error: ' + e.message;
     status.classList.add('err');
@@ -1193,20 +1410,13 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
 
 $('downloadSvgBtn').addEventListener('click', ()=>{
   if (!lastState) return;
-  const n = lastState.svgs.length;
-  lastState.svgs.forEach((svg,i)=>{
-    const suffix = n>1 ? `_page${i+1}of${n}` : '';
-    setTimeout(()=>downloadSvgBlob(svg, `tower_placement_diagram${suffix}.svg`), i*250);
-  });
+  const merged = mergeSvgPages(lastState.svgs);
+  downloadSvgBlob(merged, 'tower_placement_diagram.svg');
 });
 
 $('downloadPngBtn').addEventListener('click', ()=>{
   if (!lastState) return;
-  const n = lastState.svgs.length;
-  lastState.svgs.forEach((svg,i)=>{
-    const suffix = n>1 ? `_page${i+1}of${n}` : '';
-    setTimeout(()=>downloadSvgAsPng(svg, `tower_placement_diagram${suffix}.png`), i*400);
-  });
+  downloadMergedPng(lastState.svgs, 'tower_placement_diagram.png');
 });
 
 
