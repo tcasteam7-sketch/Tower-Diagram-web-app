@@ -145,7 +145,7 @@
     <div id="status">Select the Lat/Long CSV (required). Add the Performance CSV too if you want RSSI/distance readings on the links — otherwise the diagram will just show tower placement and connections. Diagrams with more than 27 stations are automatically split across multiple full-size pages to avoid crowding. Then click Generate.</div>
     <div class="legend">
       <span><span class="swatch" style="background:#f6c945;border:2px solid #a97e00"></span>Main Station</span>
-      <span><span class="swatch" style="background:#f5a623;border:2px solid #8a5200"></span>IBH (Block Hut)</span>
+      <span><span class="swatch" style="background:#8b5cf6;border:2px solid #4c1d95"></span>IBH (Block Hut)</span>
       <span><span class="swatch" style="background:#3b82f6;border:2px solid #173f9e"></span>LC Gate</span>
       <span><span class="lineswatch" style="background:#1e8e3e"></span>Good (RSSI mag. &lt; 70 dBm)</span>
       <span><span class="lineswatch" style="background:#e8850c"></span>Fair (70&ndash;75 dBm)</span>
@@ -191,13 +191,15 @@ function cleanName(s){ return String(s).replace(/\s+/g,' ').trim(); }
 function firstFloat(s){ const m = String(s).match(/-?\d+\.?\d*/); return m ? parseFloat(m[0]) : null; }
 function classifyKind(name){
   const n = name.toUpperCase();
-  if (n.includes('IBH')) return 'ibh';
-  if (n.includes('LC GATE') || n.includes('LC-GATE') || n.startsWith('LC ')) return 'lc';
+  // LC Gate: names containing "LC" tied to a number, e.g. "-LC 260", "LC-260", "LC 260", or the literal "LC GATE"
+  if (/\bLC[\s-]*\d+/.test(n) || n.includes('LC GATE') || n.includes('LC-GATE')) return 'lc';
+  // IBH / Block Hut: names ending in " IB" or " IBH" as a standalone word (e.g. "Beraghat IB", "Kareli IBH")
+  if (/\bIBH?\b/.test(n)) return 'ibh';
   return 'normal';
 }
 const COLORS = {
   normal: ['#f6c945','#a97e00','#1a1200'],
-  ibh:    ['#f5a623','#8a5200','#1a1200'],
+  ibh:    ['#8b5cf6','#4c1d95','#ffffff'],
   lc:     ['#3b82f6','#173f9e','#ffffff'],
 };
 // Good: |RSSI| < 70 dBm. Fair: 70-75 dBm. Poor: > 75 dBm.
@@ -583,13 +585,33 @@ function buildSnakeSvg(nodes, edges, topo, title, hasPerf, pageCtx){
     const a=backbone[i], b=backbone[i+1];
     if ((a+'|'+b) in edgeLookup) gpsTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
   }
+  // Include every branch/spur link too (internal chain links, the split-off
+  // link from the fork station, and the rejoin link), plus any extra
+  // bridging edges — so the total reflects ALL GPS distances on the page,
+  // not just the main backbone run.
+  for (const spur of spurs){
+    const {chain, fork, rejoin} = spur;
+    for (let j=0;j<chain.length-1;j++){
+      const a=chain[j], b=chain[j+1];
+      if ((a+'|'+b) in edgeLookup) gpsTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+    }
+    if (fork!==null && (fork+'|'+chain[0]) in edgeLookup){
+      gpsTotal += haversineKm(nodes[fork].lat,nodes[fork].lon,nodes[chain[0]].lat,nodes[chain[0]].lon);
+    }
+    if (rejoin!==null && (chain[chain.length-1]+'|'+rejoin) in edgeLookup){
+      gpsTotal += haversineKm(nodes[chain[chain.length-1]].lat,nodes[chain[chain.length-1]].lon,nodes[rejoin].lat,nodes[rejoin].lon);
+    }
+  }
+  for (const [a,b] of extraEdges){
+    gpsTotal += haversineKm(nodes[a].lat,nodes[a].lon,nodes[b].lat,nodes[b].lon);
+  }
   const nAll = Object.keys(nodes).length;
   const pageStationCount = backbone.length + spurs.reduce((s,sp)=>s+sp.chain.length,0);
   const headerCountLabel = (pageCtx.totalPages && pageCtx.totalPages>1)
     ? `${pageStationCount} on this page (${nAll} total)`
     : `${nAll} stations`;
   elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="38" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="800" fill="#ffffff" text-anchor="end">${xmlEsc(headerCountLabel)}${nSpurs? ' \u00b7 '+nSpurs+' branch':''}</text>`);
-  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Main line: ${gpsTotal.toFixed(2)} KM</text>`);
+  elems.push(`<text x="${CANVAS_W-PAD_X-10}" y="68" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#7fd08a" text-anchor="end">Total line: ${gpsTotal.toFixed(2)} KM</text>`);
 
   // horizontal links (backbone)
   for (let i=0;i<N-1;i++){
@@ -1159,7 +1181,7 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     renderMap(nodes, edges, topo);
 
     const nSpurs = topo.spurs.length;
-    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, main line ${gpsGrandTotal.toFixed(2)} KM.` + (totalPages>1 ? ` Split across ${totalPages} pages (max ${MAX_STATIONS_PER_PAGE} stations/page).` : '') + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
+    status.textContent = `Done — ${Object.keys(nodes).length} stations` + (nSpurs? ` (${nSpurs} branch${nSpurs>1?'es':''} detected)`:'') + `, total line ${gpsGrandTotal.toFixed(2)} KM.` + (totalPages>1 ? ` Split across ${totalPages} pages (max ${MAX_STATIONS_PER_PAGE} stations/page).` : '') + (hasPerf ? '' : ' (no Performance CSV — showing placement only, no RSSI/distance readings)') + (warnings.length? ` ${warnings.length} warning(s): ${warnings.slice(0,3).join('; ')}`:'');
     status.classList.add('ok');
     lastState = {svgs: pageSvgs};
   } catch(e){
